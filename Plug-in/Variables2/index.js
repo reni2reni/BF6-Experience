@@ -15,6 +15,9 @@
 
     const STORAGE_KEY_CATS = "bf-portal-extvars-cat-order";
     const STORAGE_KEY_DEF_ORDER = "bf-portal-extvars-def-order";
+    const STORAGE_KEY_POS = "bf-portal-extvars-win-pos";
+    const STORAGE_KEY_SIZE = "bf-portal-extvars-win-size";
+    const STORAGE_KEY_COLLAPSED = "bf-portal-extvars-win-collapsed";
 
     function loadCategoryOrder() {
         try {
@@ -207,10 +210,11 @@
     (function injectStyle() {
         const style = document.createElement("style");
         style.textContent = `
-            .ev-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:Arial,sans-serif;}
-            .ev-modal{position:absolute; width:900px; height:600px; min-width:500px; min-height:350px; background:#1e1e1e; border-radius:8px; padding:16px; display:flex; flex-direction:column; color:#fff; box-shadow:0 8px 32px rgba(0,0,0,0.8); resize:both; overflow:hidden;}
-.ev-header{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #333; padding-bottom:8px; cursor:move; user-select:none;}
-            .ev-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px;}
+            .ev-overlay{position:fixed;inset:0;background:transparent;pointer-events:none;z-index:99999;font-family:Arial,sans-serif;}
+            .ev-modal{position:fixed;background:#1e1e1e;border-radius:8px;padding:16px;display:flex;flex-direction:column;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,0.8);resize:both;overflow:hidden;pointer-events:auto;}
+            .ev-modal.collapsed{height:auto !important; min-height:0 !important; resize:none;}
+            .ev-modal.collapsed .ev-content{display:none !important;}
+            .ev-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px;cursor:move;user-select:none;}
             .ev-title{font-size:18px;font-weight:bold;}
             .ev-content{display:flex;gap:12px;flex:1;overflow:hidden;}
             .ev-cats{width:220px;background:#111;border-radius:6px;padding:8px;overflow-y:auto;border:1px solid #333;}
@@ -226,436 +230,400 @@
             .ev-del{background:#a1260d;}
             .ev-close{background:#555;}
             .ev-muted{color:#888;font-size:12px;}
-            .ev-modal.collapsed{height:auto !important; min-height:0 !important; resize:none;}
-            .ev-modal.collapsed .ev-content{display:none !important;}
         `;
         document.head.appendChild(style);
     })();
 
     // ---------- Modal Panel ----------
-  const STORAGE_KEY_POS = "bf-portal-extvars-win-pos";
-  const STORAGE_KEY_SIZE = "bf-portal-extvars-win-size";
+    function showVariableManagerPanel() {
+        const ws = getMainWorkspaceSafe();
+        const live = getLiveRegistry();
 
-  function showVariableManagerPanel() {
-    const ws = getMainWorkspaceSafe();
-    const live = getLiveRegistry();
+        const overlay = document.createElement("div");
+        overlay.className = "ev-overlay";
 
-    const overlay = document.createElement("div");
-    overlay.className = "ev-overlay";
-    // 背景のクリックでの閉じるを無効化（移動やリサイズの邪魔になるため）
-    overlay.style.background = "transparent";
-    overlay.style.pointerEvents = "none";
+        const modal = document.createElement("div");
+        modal.className = "ev-modal";
+        overlay.appendChild(modal);
 
-    const modal = document.createElement("div");
-    modal.className = "ev-modal";
-    modal.style.pointerEvents = "auto";
+        // ウィンドウ状態の復元（なければ中央・800x600px）
+        let isCollapsed = false;
+        try {
+            const savedPos = JSON.parse(localStorage.getItem(STORAGE_KEY_POS));
+            const savedSize = JSON.parse(localStorage.getItem(STORAGE_KEY_SIZE));
+            isCollapsed = JSON.parse(localStorage.getItem(STORAGE_KEY_COLLAPSED)) || false;
 
-    // 保存された位置・サイズの復元
-    try {
-      const savedPos = JSON.parse(localStorage.getItem(STORAGE_KEY_POS));
-      if (savedPos && typeof savedPos.x === "number" && typeof savedPos.y === "number") {
-        modal.style.left = `${savedPos.x}px`;
-        modal.style.top = `${savedPos.y}px`;
-        modal.style.transform = "none";
-      } else {
-        modal.style.left = `calc(50% - 450px)`;
-        modal.style.top = `calc(50% - 300px)`;
-        modal.style.transform = "none";
-      }
-      const savedSize = JSON.parse(localStorage.getItem(STORAGE_KEY_SIZE));
-      if (savedSize && typeof savedSize.w === "number" && typeof savedSize.h === "number") {
-        modal.style.width = `${savedSize.w}px`;
-        modal.style.height = `${savedSize.h}px`;
-      }
-    } catch (e) {
-      modal.style.left = `calc(50% - 450px)`;
-      modal.style.top = `calc(50% - 300px)`;
-    }
-
-    overlay.appendChild(modal);
-
-    // Header
-    const header = document.createElement("div");
-    header.className = "ev-header";
-    const title = document.createElement("div");
-    title.className = "ev-title";
-    title.innerText = "Variable Manager";
-    header.appendChild(title);
-
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "ev-btn ev-close";
-    closeBtn.innerText = "✕ Close";
-    closeBtn.onclick = () => {
-      saveCurrentWindowState();
-      overlay.remove();
-    };
-    header.appendChild(closeBtn);
-    modal.appendChild(header);
-
-    const STORAGE_KEY_COLLAPSED = "bf-portal-extvars-win-collapsed";
-    let isCollapsed = false;
-
-    try {
-      const savedPos = JSON.parse(localStorage.getItem(STORAGE_KEY_POS));
-      if (savedPos && typeof savedPos.x === "number" && typeof savedPos.y === "number") {
-        modal.style.left = `${savedPos.x}px`;
-        modal.style.top = `${savedPos.y}px`;
-        modal.style.transform = "none";
-      } else {
-        // 初期位置：画面中央 (幅800/高さ600を想定してセンター調整)
-        modal.style.left = `calc(50% - 400px)`;
-        modal.style.top = `calc(50% - 300px)`;
-        modal.style.transform = "none";
-      }
-
-      const savedSize = JSON.parse(localStorage.getItem(STORAGE_KEY_SIZE));
-      if (savedSize && typeof savedSize.w === "number" && typeof savedSize.h === "number") {
-        modal.style.width = `${savedSize.w}px`;
-        modal.style.height = `${savedSize.h}px`;
-      } else {
-        // 初期サイズ：幅800px、高さ600px
-        modal.style.width = `800px`;
-        modal.style.height = `600px`;
-      }
-
-      isCollapsed = JSON.parse(localStorage.getItem(STORAGE_KEY_COLLAPSED)) || false;
-      if (isCollapsed) {
-        modal.classList.add("collapsed");
-      }
-    } catch (e) {
-      modal.style.left = `calc(50% - 400px)`;
-      modal.style.top = `calc(50% - 300px)`;
-      modal.style.width = `800px`;
-      modal.style.height = `600px`;
-    }
-
-    let isDragging = false;
-    let hasMoved = false;
-    let startX = 0, startY = 0;
-    let dragOffsetX = 0, dragOffsetY = 0;
-
-    header.onmousedown = (e) => {
-      if (e.target === closeBtn) return;
-      isDragging = true;
-      hasMoved = false;
-      startX = e.clientX;
-      startY = e.clientY;
-      const rect = modal.getBoundingClientRect();
-      dragOffsetX = e.clientX - rect.left;
-      dragOffsetY = e.clientY - rect.top;
-      e.preventDefault();
-    };
-
-    window.addEventListener("mousemove", (e) => {
-      if (!isDragging) return;
-      if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) {
-        hasMoved = true;
-      }
-      let newX = e.clientX - dragOffsetX;
-      let newY = e.clientY - dragOffsetY;
-      modal.style.left = `${newX}px`;
-      modal.style.top = `${newY}px`;
-    });
-
-    window.addEventListener("mouseup", () => {
-      if (isDragging) {
-        isDragging = false;
-        saveCurrentWindowState();
-      }
-    });
-
-    header.onclick = (e) => {
-      if (e.target === closeBtn) return;
-      if (hasMoved) return; // ドラッグ時は折りたたまない
-
-      isCollapsed = !isCollapsed;
-      if (isCollapsed) {
-        modal.classList.add("collapsed");
-      } else {
-        modal.classList.remove("collapsed");
-      }
-      try {
-        localStorage.setItem(STORAGE_KEY_COLLAPSED, JSON.stringify(isCollapsed));
-      } catch (e) { }
-    };
-
-    // --- ウィンドウサイズ変更の監視と保存 ---
-    function saveCurrentWindowState() {
-      try {
-        const rect = modal.getBoundingClientRect();
-        localStorage.setItem(STORAGE_KEY_POS, JSON.stringify({ x: rect.left, y: rect.top }));
-        localStorage.setItem(STORAGE_KEY_SIZE, JSON.stringify({ w: rect.width, h: rect.height }));
-      } catch (e) { }
-    }
-
-    // リサイズ終了時にサイズを保存するObserver
-    const resizeObserver = new ResizeObserver(() => {
-      saveCurrentWindowState();
-    });
-    resizeObserver.observe(modal);
-
-    // Content
-    const content = document.createElement("div");
-    content.className = "ev-content";
-    modal.appendChild(content);
-
-    const leftPane = document.createElement("div");
-    leftPane.className = "ev-cats";
-    const rightPane = document.createElement("div");
-    rightPane.className = "ev-list";
-
-    content.appendChild(leftPane);
-    content.appendChild(rightPane);
-
-    let currentCategory = CATEGORIES[0] || "Global";
-    const defOrderMap = loadDefOrderMap();
-
-    function renderModal() {
-      // ==========================================
-      // 左側：カテゴリ一覧の描画 ＆ ドラッグ並び替え
-      // ==========================================
-      leftPane.innerHTML = "";
-      const currentLive = getLiveRegistry();
-
-      leftPane.ondragover = (e) => e.preventDefault();
-      leftPane.ondrop = (e) => {
-        e.preventDefault();
-        const draggedCat = e.dataTransfer.getData("text/category");
-        const targetCat = e.target.closest(".ev-cat")?.dataset.catName;
-        if (draggedCat && targetCat && draggedCat !== targetCat) {
-          const oldIdx = CATEGORIES.indexOf(draggedCat);
-          const newIdx = CATEGORIES.indexOf(targetCat);
-          if (oldIdx > -1 && newIdx > -1) {
-            CATEGORIES.splice(oldIdx, 1);
-            CATEGORIES.splice(newIdx, 0, draggedCat);
-            saveCategoryOrder(CATEGORIES);
-            renderModal();
-          }
-        }
-      };
-
-      CATEGORIES.forEach(cat => {
-        const item = document.createElement("div");
-        item.className = `ev-cat ${cat === currentCategory ? "selected" : ""}`;
-        item.dataset.catName = cat;
-        item.draggable = true;
-
-        const count = (currentLive[cat] || []).length;
-
-        const leftWrap = document.createElement("div");
-        leftWrap.style.cssText = "display:flex; align-items:center; gap:6px; pointer-events:none;";
-
-        const handle = document.createElement("span");
-        handle.innerText = "≡";
-        handle.style.cssText = "font-weight:bold; color:#aaa;";
-
-        const nameSpan = document.createElement("span");
-        nameSpan.innerText = cat;
-
-        leftWrap.appendChild(handle);
-        leftWrap.appendChild(nameSpan);
-
-        const countSpan = document.createElement("span");
-        countSpan.className = "ev-muted";
-        countSpan.innerText = count;
-
-        item.appendChild(leftWrap);
-        item.appendChild(countSpan);
-
-        item.ondragstart = (e) => {
-          e.dataTransfer.setData("text/category", cat);
-          e.stopPropagation();
-        };
-
-        item.onclick = (e) => {
-          if (e.target === handle) return;
-          currentCategory = cat;
-          renderModal();
-        };
-        leftPane.appendChild(item);
-      });
-
-      // ==========================================
-      // 右側：変数一覧の描画 ＆ ドラッグ並び替え
-      // ==========================================
-      rightPane.innerHTML = "";
-      const varsInCat = currentLive[currentCategory] || [];
-
-      // 新規作成フォーム
-      const formDiv = document.createElement("div");
-      formDiv.style.cssText = "display:flex; gap:8px; margin-bottom:12px;";
-
-      const input = document.createElement("input");
-      input.type = "text";
-      input.placeholder = `[${currentCategory}] New variable name...`;
-      input.style.cssText = "flex:1; padding:6px 10px; background:#222; border:1px solid #444; color:#fff; border-radius:4px; outline:none;";
-
-      const addBtn = document.createElement("button");
-      addBtn.className = "ev-btn ev-add";
-      addBtn.innerText = "Add";
-
-      const handleAdd = () => {
-        const valName = input.value.trim();
-        if (valName) {
-          const newId = createID();
-          createWorkspaceVariable(ws, valName, currentCategory, newId);
-          if (!defOrderMap[currentCategory]) defOrderMap[currentCategory] = [];
-          defOrderMap[currentCategory].push(newId);
-          saveDefOrderMap(defOrderMap);
-          input.value = "";
-          renderModal();
-        }
-      };
-
-      addBtn.onclick = handleAdd;
-      input.onkeydown = (e) => { if (e.key === "Enter") handleAdd(); };
-
-      formDiv.appendChild(input);
-      formDiv.appendChild(addBtn);
-      rightPane.appendChild(formDiv);
-
-      const listContainer = document.createElement("div");
-      listContainer.style.cssText = "flex:1; overflow-y:auto;";
-
-      // 変数のドロップ処理
-      listContainer.ondragover = (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-      };
-
-      listContainer.ondrop = (e) => {
-        e.preventDefault();
-        const draggedId = e.dataTransfer.getData("text/varId");
-        if (!draggedId) return;
-
-        const targetRow = e.target.closest(".ev-row");
-
-        if (!defOrderMap[currentCategory]) {
-          defOrderMap[currentCategory] = varsInCat.map(v => v.id);
-        }
-
-        const orderArr = defOrderMap[currentCategory];
-        const oldIdx = orderArr.indexOf(draggedId);
-        if (oldIdx > -1) orderArr.splice(oldIdx, 1);
-
-        if (targetRow && targetRow.dataset.varId) {
-          const targetId = targetRow.dataset.varId;
-          if (targetId !== draggedId) {
-            const newIdx = orderArr.indexOf(targetId);
-            if (newIdx > -1) {
-              orderArr.splice(newIdx, 0, draggedId);
+            if (savedPos && typeof savedPos.left === "string" && typeof savedPos.top === "string") {
+                modal.style.left = savedPos.left;
+                modal.style.top = savedPos.top;
             } else {
-              orderArr.push(draggedId);
+                modal.style.left = `calc(50% - 400px)`;
+                modal.style.top = `calc(50% - 300px)`;
             }
-          } else {
-            orderArr.push(draggedId);
-          }
-        } else {
-          orderArr.push(draggedId);
+
+            if (savedSize && typeof savedSize.width === "string" && typeof savedSize.height === "string") {
+                modal.style.width = savedSize.width;
+                modal.style.height = savedSize.height;
+            } else {
+                modal.style.width = "800px";
+                modal.style.height = "600px";
+            }
+
+            if (isCollapsed) {
+                modal.classList.add("collapsed");
+            }
+        } catch(e) {
+            modal.style.left = `calc(50% - 400px)`;
+            modal.style.top = `calc(50% - 300px)`;
+            modal.style.width = "800px";
+            modal.style.height = "600px";
         }
 
-        saveDefOrderMap(defOrderMap);
-        reorderVariablesInMap(ws, currentCategory, orderArr);
-        renderModal();
-      };
+        function saveWindowState() {
+            try {
+                localStorage.setItem(STORAGE_KEY_POS, JSON.stringify({ left: modal.style.left, top: modal.style.top }));
+                localStorage.setItem(STORAGE_KEY_SIZE, JSON.stringify({ width: modal.style.width, height: modal.style.height }));
+                localStorage.setItem(STORAGE_KEY_COLLAPSED, JSON.stringify(isCollapsed));
+            } catch(e) {}
+        }
 
-      // デフォルト並び順の適用
-      let sortedVars = [...varsInCat];
-      const savedDefIds = defOrderMap[currentCategory] || [];
-      if (savedDefIds.length > 0) {
-        sortedVars.sort((a, b) => {
-          const idxA = savedDefIds.indexOf(a.id);
-          const idxB = savedDefIds.indexOf(b.id);
-          if (idxA === -1) return 1;
-          if (idxB === -1) return -1;
-          return idxA - idxB;
-        });
-      }
+        // Header
+        const header = document.createElement("div");
+        header.className = "ev-header";
+        const title = document.createElement("div");
+        title.className = "ev-title";
+        title.innerText = "Variable Manager";
+        header.appendChild(title);
 
-      if (sortedVars.length === 0) {
-        const empty = document.createElement("div");
-        empty.className = "ev-muted";
-        empty.style.padding = "20px";
-        empty.style.textAlign = "center";
-        empty.innerText = "No variables in this category";
-        listContainer.appendChild(empty);
-      } else {
-        sortedVars.forEach(v => {
-          const row = document.createElement("div");
-          row.className = "ev-row";
-          row.dataset.varId = v.id;
-          row.draggable = true;
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "ev-btn ev-close";
+        closeBtn.innerText = "✕ Close";
+        closeBtn.onclick = () => {
+            saveWindowState();
+            overlay.remove();
+        };
+        header.appendChild(closeBtn);
+        modal.appendChild(header);
 
-          const leftCol = document.createElement("div");
-          leftCol.style.cssText = "display:flex; align-items:center; gap:8px; pointer-events:none;";
+        // --- ドラッグ移動 ＆ 折りたたみロジック ---
+        let isDragging = false;
+        let hasMoved = false;
+        let startX = 0, startY = 0;
+        let dragOffsetX = 0, dragOffsetY = 0;
 
-          const varHandle = document.createElement("span");
-          varHandle.innerText = "≡";
-          varHandle.style.cssText = "font-weight:bold; color:#aaa; font-size:16px;";
+        header.onmousedown = (e) => {
+            if (e.target === closeBtn) return;
+            isDragging = true;
+            hasMoved = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            const rect = modal.getBoundingClientRect();
+            dragOffsetX = e.clientX - rect.left;
+            dragOffsetY = e.clientY - rect.top;
+            e.preventDefault();
+        };
 
-          const infoDiv = document.createElement("div");
-          const usageCount = countVariableUsage(ws, v);
-          infoDiv.innerHTML = `<div style="font-weight:bold;">${v.name}</div><div class="ev-muted">Uses: ${usageCount}</div>`;
-
-          leftCol.appendChild(varHandle);
-          leftCol.appendChild(infoDiv);
-
-          row.ondragstart = (e) => {
-            e.dataTransfer.setData("text/varId", v.id);
-            e.dataTransfer.effectAllowed = "move";
-            row.style.opacity = "0.4";
-          };
-
-          row.ondragend = () => {
-            row.style.opacity = "1.0";
-          };
-
-          const btnGroup = document.createElement("div");
-          btnGroup.style.display = "flex";
-          btnGroup.style.gap = "6px";
-
-          const editBtn = document.createElement("button");
-          editBtn.className = "ev-btn ev-edit";
-          editBtn.innerText = "Edit";
-          editBtn.onclick = () => {
-            const newName = prompt("Enter new variable name:", v.name);
-            if (newName && newName.trim() !== "") {
-              const oldName = v.name;
-              renameWorkspaceVariable(ws, v._raw, newName.trim());
-              updateBlocksForVariableRename(oldName, newName.trim(), ws);
-              renderModal();
+        window.addEventListener("mousemove", (e) => {
+            if (!isDragging) return;
+            if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) {
+                hasMoved = true;
             }
-          };
+            let newX = e.clientX - dragOffsetX;
+            let newY = e.clientY - dragOffsetY;
+            modal.style.left = `${newX}px`;
+            modal.style.top = `${newY}px`;
+        });
 
-          const delBtn = document.createElement("button");
-          delBtn.className = "ev-btn ev-del";
-          delBtn.innerText = "Delete";
-          delBtn.onclick = () => {
-            if (confirm(`Delete variable "${v.name}"?`)) {
-              deleteWorkspaceVariable(ws, v.id) || deleteWorkspaceVariable(ws, v.name);
-              if (defOrderMap[currentCategory]) {
-                defOrderMap[currentCategory] = defOrderMap[currentCategory].filter(id => id !== v.id);
+        window.addEventListener("mouseup", () => {
+            if (isDragging) {
+                isDragging = false;
+                saveWindowState();
+            }
+        });
+
+        header.onclick = (e) => {
+            if (e.target === closeBtn) return;
+            if (hasMoved) return;
+            
+            isCollapsed = !isCollapsed;
+            if (isCollapsed) {
+                modal.classList.add("collapsed");
+            } else {
+                modal.classList.remove("collapsed");
+            }
+            saveWindowState();
+        };
+
+        // リサイズ時の保存
+        const observer = new ResizeObserver(() => {
+            if (!isCollapsed) {
+                saveWindowState();
+            }
+        });
+        observer.observe(modal);
+
+        // Content
+        const content = document.createElement("div");
+        content.className = "ev-content";
+        modal.appendChild(content);
+
+        const leftPane = document.createElement("div");
+        leftPane.className = "ev-cats";
+        const rightPane = document.createElement("div");
+        rightPane.className = "ev-list";
+
+        content.appendChild(leftPane);
+        content.appendChild(rightPane);
+
+        let currentCategory = CATEGORIES[0] || "Global";
+        const defOrderMap = loadDefOrderMap();
+
+        function renderModal() {
+            // ==========================================
+            // 左側：カテゴリ一覧の描画 ＆ ドラッグ並び替え
+            // ==========================================
+            leftPane.innerHTML = "";
+            const currentLive = getLiveRegistry();
+
+            leftPane.ondragover = (e) => e.preventDefault();
+            leftPane.ondrop = (e) => {
+                e.preventDefault();
+                const draggedCat = e.dataTransfer.getData("text/category");
+                const targetCat = e.target.closest(".ev-cat")?.dataset.catName;
+                if (draggedCat && targetCat && draggedCat !== targetCat) {
+                    const oldIdx = CATEGORIES.indexOf(draggedCat);
+                    const newIdx = CATEGORIES.indexOf(targetCat);
+                    if (oldIdx > -1 && newIdx > -1) {
+                        CATEGORIES.splice(oldIdx, 1);
+                        CATEGORIES.splice(newIdx, 0, draggedCat);
+                        saveCategoryOrder(CATEGORIES);
+                        renderModal();
+                    }
+                }
+            };
+
+            CATEGORIES.forEach(cat => {
+                const item = document.createElement("div");
+                item.className = `ev-cat ${cat === currentCategory ? "selected" : ""}`;
+                item.dataset.catName = cat;
+                item.draggable = true;
+
+                const count = (currentLive[cat] || []).length;
+                
+                const leftWrap = document.createElement("div");
+                leftWrap.style.cssText = "display:flex; align-items:center; gap:6px; pointer-events:none;";
+                
+                const handle = document.createElement("span");
+                handle.innerText = "≡";
+                handle.style.cssText = "font-weight:bold; color:#aaa;";
+                
+                const nameSpan = document.createElement("span");
+                nameSpan.innerText = cat;
+
+                leftWrap.appendChild(handle);
+                leftWrap.appendChild(nameSpan);
+
+                const countSpan = document.createElement("span");
+                countSpan.className = "ev-muted";
+                countSpan.innerText = count;
+
+                item.appendChild(leftWrap);
+                item.appendChild(countSpan);
+
+                item.ondragstart = (e) => {
+                    e.dataTransfer.setData("text/category", cat);
+                    e.stopPropagation();
+                };
+
+                item.onclick = (e) => {
+                    if (e.target === handle) return;
+                    currentCategory = cat;
+                    renderModal();
+                };
+                leftPane.appendChild(item);
+            });
+
+            // ==========================================
+            // 右側：変数一覧の描画 ＆ ドラッグ並び替え
+            // ==========================================
+            rightPane.innerHTML = "";
+            const varsInCat = currentLive[currentCategory] || [];
+
+            // 新規作成フォーム
+            const formDiv = document.createElement("div");
+            formDiv.style.cssText = "display:flex; gap:8px; margin-bottom:12px;";
+
+            const input = document.createElement("input");
+            input.type = "text";
+            input.placeholder = `[${currentCategory}] New variable name...`;
+            input.style.cssText = "flex:1; padding:6px 10px; background:#222; border:1px solid #444; color:#fff; border-radius:4px; outline:none;";
+
+            const addBtn = document.createElement("button");
+            addBtn.className = "ev-btn ev-add";
+            addBtn.innerText = "Add";
+
+            const handleAdd = () => {
+                const valName = input.value.trim();
+                if (valName) {
+                    const newId = createID();
+                    createWorkspaceVariable(ws, valName, currentCategory, newId);
+                    if (!defOrderMap[currentCategory]) defOrderMap[currentCategory] = [];
+                    defOrderMap[currentCategory].push(newId);
+                    saveDefOrderMap(defOrderMap);
+                    input.value = "";
+                    renderModal();
+                }
+            };
+
+            addBtn.onclick = handleAdd;
+            input.onkeydown = (e) => { if (e.key === "Enter") handleAdd(); };
+
+            formDiv.appendChild(input);
+            formDiv.appendChild(addBtn);
+            rightPane.appendChild(formDiv);
+
+            const listContainer = document.createElement("div");
+            listContainer.style.cssText = "flex:1; overflow-y:auto;";
+
+            // 変数のドロップ処理
+            listContainer.ondragover = (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+            };
+
+            listContainer.ondrop = (e) => {
+                e.preventDefault();
+                const draggedId = e.dataTransfer.getData("text/varId");
+                if (!draggedId) return;
+
+                const targetRow = e.target.closest(".ev-row");
+                
+                if (!defOrderMap[currentCategory]) {
+                    defOrderMap[currentCategory] = varsInCat.map(v => v.id);
+                }
+
+                const orderArr = defOrderMap[currentCategory];
+                const oldIdx = orderArr.indexOf(draggedId);
+                if (oldIdx > -1) orderArr.splice(oldIdx, 1);
+
+                if (targetRow && targetRow.dataset.varId) {
+                    const targetId = targetRow.dataset.varId;
+                    if (targetId !== draggedId) {
+                        const newIdx = orderArr.indexOf(targetId);
+                        if (newIdx > -1) {
+                            orderArr.splice(newIdx, 0, draggedId);
+                        } else {
+                            orderArr.push(draggedId);
+                        }
+                    } else {
+                        orderArr.push(draggedId);
+                    }
+                } else {
+                    orderArr.push(draggedId);
+                }
+
                 saveDefOrderMap(defOrderMap);
-              }
-              renderModal();
+                reorderVariablesInMap(ws, currentCategory, orderArr);
+                renderModal();
+            };
+
+            // デフォルト並び順の適用
+            let sortedVars = [...varsInCat];
+            const savedDefIds = defOrderMap[currentCategory] || [];
+            if (savedDefIds.length > 0) {
+                sortedVars.sort((a, b) => {
+                    const idxA = savedDefIds.indexOf(a.id);
+                    const idxB = savedDefIds.indexOf(b.id);
+                    if (idxA === -1) return 1;
+                    if (idxB === -1) return -1;
+                    return idxA - idxB;
+                });
             }
-          };
 
-          btnGroup.appendChild(editBtn);
-          btnGroup.appendChild(delBtn);
+            if (sortedVars.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "ev-muted";
+                empty.style.padding = "20px";
+                empty.style.textAlign = "center";
+                empty.innerText = "No variables in this category";
+                listContainer.appendChild(empty);
+            } else {
+                sortedVars.forEach(v => {
+                    const row = document.createElement("div");
+                    row.className = "ev-row";
+                    row.dataset.varId = v.id;
+                    row.draggable = true;
 
-          row.appendChild(leftCol);
-          row.appendChild(btnGroup);
-          listContainer.appendChild(row);
-        });
-      }
+                    const leftCol = document.createElement("div");
+                    leftCol.style.cssText = "display:flex; align-items:center; gap:8px; pointer-events:none;";
 
-      rightPane.appendChild(listContainer);
+                    const varHandle = document.createElement("span");
+                    varHandle.innerText = "≡";
+                    varHandle.style.cssText = "font-weight:bold; color:#aaa; font-size:16px;";
+
+                    const infoDiv = document.createElement("div");
+                    const usageCount = countVariableUsage(ws, v);
+                    infoDiv.innerHTML = `<div style="font-weight:bold;">${v.name}</div><div class="ev-muted">Uses: ${usageCount}</div>`;
+
+                    leftCol.appendChild(varHandle);
+                    leftCol.appendChild(infoDiv);
+
+                    row.ondragstart = (e) => {
+                        e.dataTransfer.setData("text/varId", v.id);
+                        e.dataTransfer.effectAllowed = "move";
+                        row.style.opacity = "0.4";
+                    };
+
+                    row.ondragend = () => {
+                        row.style.opacity = "1.0";
+                    };
+
+                    const btnGroup = document.createElement("div");
+                    btnGroup.style.display = "flex";
+                    btnGroup.style.gap = "6px";
+
+                    const editBtn = document.createElement("button");
+                    editBtn.className = "ev-btn ev-edit";
+                    editBtn.innerText = "Edit";
+                    editBtn.onclick = () => {
+                        const newName = prompt("Enter new variable name:", v.name);
+                        if (newName && newName.trim() !== "") {
+                            const oldName = v.name;
+                            renameWorkspaceVariable(ws, v._raw, newName.trim());
+                            updateBlocksForVariableRename(oldName, newName.trim(), ws);
+                            renderModal();
+                        }
+                    };
+
+                    const delBtn = document.createElement("button");
+                    delBtn.className = "ev-btn ev-del";
+                    delBtn.innerText = "Delete";
+                    delBtn.onclick = () => {
+                        if (confirm(`Delete variable "${v.name}"?`)) {
+                            deleteWorkspaceVariable(ws, v.id) || deleteWorkspaceVariable(ws, v.name);
+                            if (defOrderMap[currentCategory]) {
+                                defOrderMap[currentCategory] = defOrderMap[currentCategory].filter(id => id !== v.id);
+                                saveDefOrderMap(defOrderMap);
+                            }
+                            renderModal();
+                        }
+                    };
+
+                    btnGroup.appendChild(editBtn);
+                    btnGroup.appendChild(delBtn);
+
+                    row.appendChild(leftCol);
+                    row.appendChild(btnGroup);
+                    listContainer.appendChild(row);
+                });
+            }
+
+            rightPane.appendChild(listContainer);
+        }
+
+        renderModal();
+        document.body.appendChild(overlay);
     }
-
-    renderModal();
-    document.body.appendChild(overlay);
-  }
 
     // ---------- プラグイン登録 ----------
     const variableManagerItem = {
