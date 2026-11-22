@@ -302,22 +302,31 @@
         modal.style.top = `${savedPos.y}px`;
         modal.style.transform = "none";
       } else {
-        modal.style.left = `calc(50% - 450px)`;
+        // 初期位置：画面中央 (幅800/高さ600を想定してセンター調整)
+        modal.style.left = `calc(50% - 400px)`;
         modal.style.top = `calc(50% - 300px)`;
         modal.style.transform = "none";
       }
+
       const savedSize = JSON.parse(localStorage.getItem(STORAGE_KEY_SIZE));
       if (savedSize && typeof savedSize.w === "number" && typeof savedSize.h === "number") {
         modal.style.width = `${savedSize.w}px`;
         modal.style.height = `${savedSize.h}px`;
+      } else {
+        // 初期サイズ：幅800px、高さ600px
+        modal.style.width = `800px`;
+        modal.style.height = `600px`;
       }
+
       isCollapsed = JSON.parse(localStorage.getItem(STORAGE_KEY_COLLAPSED)) || false;
       if (isCollapsed) {
         modal.classList.add("collapsed");
       }
     } catch (e) {
-      modal.style.left = `calc(50% - 450px)`;
+      modal.style.left = `calc(50% - 400px)`;
       modal.style.top = `calc(50% - 300px)`;
+      modal.style.width = `800px`;
+      modal.style.height = `600px`;
     }
 
     let isDragging = false;
