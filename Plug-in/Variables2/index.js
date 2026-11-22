@@ -226,6 +226,8 @@
             .ev-del{background:#a1260d;}
             .ev-close{background:#555;}
             .ev-muted{color:#888;font-size:12px;}
+            .ev-modal.collapsed{height:auto !important; min-height:0 !important; resize:none;}
+            .ev-modal.collapsed .ev-content{display:none !important;}
         `;
         document.head.appendChild(style);
     })();
@@ -249,6 +251,10 @@
     modal.style.pointerEvents = "auto";
 
     // 保存された位置・サイズの復元
+    // --- ウィンドウ位置・サイズの復元と折りたたみ状態の復元 ---
+    const STORAGE_KEY_COLLAPSED = "bf-portal-extvars-win-collapsed";
+    let isCollapsed = false;
+
     try {
       const savedPos = JSON.parse(localStorage.getItem(STORAGE_KEY_POS));
       if (savedPos && typeof savedPos.x === "number" && typeof savedPos.y === "number") {
@@ -265,38 +271,27 @@
         modal.style.width = `${savedSize.w}px`;
         modal.style.height = `${savedSize.h}px`;
       }
+      isCollapsed = JSON.parse(localStorage.getItem(STORAGE_KEY_COLLAPSED)) || false;
+      if (isCollapsed) {
+        modal.classList.add("collapsed");
+      }
     } catch (e) {
       modal.style.left = `calc(50% - 450px)`;
       modal.style.top = `calc(50% - 300px)`;
     }
 
-    overlay.appendChild(modal);
-
-    // Header
-    const header = document.createElement("div");
-    header.className = "ev-header";
-    const title = document.createElement("div");
-    title.className = "ev-title";
-    title.innerText = "Variable Manager";
-    header.appendChild(title);
-
-    const closeBtn = document.createElement("button");
-    closeBtn.className = "ev-btn ev-close";
-    closeBtn.innerText = "✕ Close";
-    closeBtn.onclick = () => {
-      saveCurrentWindowState();
-      overlay.remove();
-    };
-    header.appendChild(closeBtn);
-    modal.appendChild(header);
-
-    // --- タイトルバーによるウィンドウ移動ロジック ---
+    // --- タイトルバーによるウィンドウ移動 ＆ ダブルクリックで折りたたみ ---
     let isDragging = false;
+    let hasMoved = false;
+    let startX = 0, startY = 0;
     let dragOffsetX = 0, dragOffsetY = 0;
 
     header.onmousedown = (e) => {
       if (e.target === closeBtn) return;
       isDragging = true;
+      hasMoved = false;
+      startX = e.clientX;
+      startY = e.clientY;
       const rect = modal.getBoundingClientRect();
       dragOffsetX = e.clientX - rect.left;
       dragOffsetY = e.clientY - rect.top;
@@ -305,6 +300,9 @@
 
     window.addEventListener("mousemove", (e) => {
       if (!isDragging) return;
+      if (Math.abs(e.clientX - startX) > 3 || Math.abs(e.clientY - startY) > 3) {
+        hasMoved = true;
+      }
       let newX = e.clientX - dragOffsetX;
       let newY = e.clientY - dragOffsetY;
       modal.style.left = `${newX}px`;
@@ -317,6 +315,22 @@
         saveCurrentWindowState();
       }
     });
+
+    // タイトルバーをクリック（ドラッグせずその場でクリック）でたたむ / 展開する
+    header.onclick = (e) => {
+      if (e.target === closeBtn) return;
+      if (hasMoved) return; // ドラッグ時は折りたたまない
+
+      isCollapsed = !isCollapsed;
+      if (isCollapsed) {
+        modal.classList.add("collapsed");
+      } else {
+        modal.classList.remove("collapsed");
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY_COLLAPSED, JSON.stringify(isCollapsed));
+      } catch (e) { }
+    };
 
     // --- ウィンドウサイズ変更の監視と保存 ---
     function saveCurrentWindowState() {
