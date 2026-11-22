@@ -251,7 +251,47 @@
     modal.style.pointerEvents = "auto";
 
     // 保存された位置・サイズの復元
-    // --- ウィンドウ位置・サイズの復元と折りたたみ状態の復元 ---
+    try {
+      const savedPos = JSON.parse(localStorage.getItem(STORAGE_KEY_POS));
+      if (savedPos && typeof savedPos.x === "number" && typeof savedPos.y === "number") {
+        modal.style.left = `${savedPos.x}px`;
+        modal.style.top = `${savedPos.y}px`;
+        modal.style.transform = "none";
+      } else {
+        modal.style.left = `calc(50% - 450px)`;
+        modal.style.top = `calc(50% - 300px)`;
+        modal.style.transform = "none";
+      }
+      const savedSize = JSON.parse(localStorage.getItem(STORAGE_KEY_SIZE));
+      if (savedSize && typeof savedSize.w === "number" && typeof savedSize.h === "number") {
+        modal.style.width = `${savedSize.w}px`;
+        modal.style.height = `${savedSize.h}px`;
+      }
+    } catch (e) {
+      modal.style.left = `calc(50% - 450px)`;
+      modal.style.top = `calc(50% - 300px)`;
+    }
+
+    overlay.appendChild(modal);
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "ev-header";
+    const title = document.createElement("div");
+    title.className = "ev-title";
+    title.innerText = "Variable Manager";
+    header.appendChild(title);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "ev-btn ev-close";
+    closeBtn.innerText = "✕ Close";
+    closeBtn.onclick = () => {
+      saveCurrentWindowState();
+      overlay.remove();
+    };
+    header.appendChild(closeBtn);
+    modal.appendChild(header);
+
     const STORAGE_KEY_COLLAPSED = "bf-portal-extvars-win-collapsed";
     let isCollapsed = false;
 
@@ -280,7 +320,6 @@
       modal.style.top = `calc(50% - 300px)`;
     }
 
-    // --- タイトルバーによるウィンドウ移動 ＆ ダブルクリックで折りたたみ ---
     let isDragging = false;
     let hasMoved = false;
     let startX = 0, startY = 0;
@@ -316,7 +355,6 @@
       }
     });
 
-    // タイトルバーをクリック（ドラッグせずその場でクリック）でたたむ / 展開する
     header.onclick = (e) => {
       if (e.target === closeBtn) return;
       if (hasMoved) return; // ドラッグ時は折りたたまない
