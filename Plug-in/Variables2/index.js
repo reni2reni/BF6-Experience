@@ -1,853 +1,542 @@
-// BF6 Extended Variable Manager
+/* global BF2042Portal, _Blockly */
 (function () {
-  const PLUGIN_ID = "bf-portal-extended-variable-manager";
+    const plugin = BF2042Portal.Plugins.getPlugin("variable-manager");
 
-  // defensive plugin handle
-  let plugin = null;
-  try {
-    if (typeof BF2042Portal !== "undefined" && BF2042Portal.Plugins?.getPlugin) {
-      plugin = BF2042Portal.Plugins.getPlugin(PLUGIN_ID) || { id: PLUGIN_ID };
-    } else {
-      plugin = { id: PLUGIN_ID };
-    }
-  } catch (e) { plugin = { id: PLUGIN_ID }; }
+    plugin.initializeWorkspace = function () {
+        console.log("Variable Manager initialized successfully");
+    };
 
-  // categories (デフォルト配列とローカルストレージ永続化)
-  const DEFAULT_CATEGORIES = [
-    "Global","AreaTrigger","CapturePoint","EmplacementSpawner","HQ","InteractPoint","LootSpawner","MCOM",
-    "Player","RingOfFire","ScreenEffect","Sector","SFX","SpatialObject","Spawner","SpawnPoint","Team",
-    "Vehicle","VehicleSpawner","VFX","VO","WaypointPath","WorldIcon"
-  ];
+    // デフォルトカテゴリ
+    const DEFAULT_CATEGORIES = [
+        "Global", "AreaTrigger", "CapturePoint", "EmplacementSpawner", "HQ", "InteractPoint", 
+        "LootSpawner", "MCOM", "Player", "RingOfFire", "ScreenEffect", "Sector", "SFX", 
+        "SpatialObject", "Spawner", "SpawnPoint", "Team", "Vehicle", "VehicleSpawner", "VFX", "VO", "WaypointPath", "WorldIcon"
+    ];
 
-  const STORAGE_KEY_CATS = "bf-portal-extvars-cat-order";
-  const STORAGE_KEY_DEF_ORDER = "bf-portal-extvars-def-order"; // ★ DEF順序専用の保存キー
+    const STORAGE_KEY_CATS = "bf-portal-extvars-cat-order";
+    const STORAGE_KEY_DEF_ORDER = "bf-portal-extvars-def-order";
 
-  function loadCategoryOrder() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CATS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const ordered = parsed.filter(c => DEFAULT_CATEGORIES.includes(c));
-          DEFAULT_CATEGORIES.forEach(c => {
-            if (!ordered.includes(c)) ordered.push(c);
-          });
-          return ordered;
-        }
-      }
-    } catch (e) {}
-    return [...DEFAULT_CATEGORIES];
-  }
-
-  function saveCategoryOrder(order) {
-    try {
-      localStorage.setItem(STORAGE_KEY_CATS, JSON.stringify(order));
-    } catch (e) {}
-  }
-
-  // ★ DEF(手動順序)の読み込みと保存ヘルパー
-  function loadDefOrderMap() {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_DEF_ORDER);
-      if (saved) return JSON.parse(saved);
-    } catch(e) {}
-    return {};
-  }
-
-  function saveDefOrderMap(map) {
-    try {
-      localStorage.setItem(STORAGE_KEY_DEF_ORDER, JSON.stringify(map));
-    } catch(e) {}
-  }
-
-  let CATEGORIES = loadCategoryOrder();
-
-  // ---------- workspace helpers ----------
-  function getMainWorkspaceSafe() {
-    try {
-      if (typeof _Blockly !== "undefined" && _Blockly.getMainWorkspace) return _Blockly.getMainWorkspace();
-      if (typeof Blockly !== "undefined" && Blockly.getMainWorkspace) return Blockly.getMainWorkspace();
-      if (typeof BF2042Portal !== "undefined" && BF2042Portal.getMainWorkspace) {
-        try { return BF2042Portal.getMainWorkspace(); } catch (e) {}
-      }
-    } catch (e) {}
-    return null;
-  }
-
-  function workspaceGetVariableMap(ws) {
-    try {
-      if (!ws) return null;
-      if (ws.getVariableMap) return ws.getVariableMap();
-      if (ws.variableMap) return ws.variableMap;
-    } catch (e) {}
-    return null;
-  }
-
-  function workspaceGetVariables(ws) {
-    try {
-      const map = workspaceGetVariableMap(ws);
-      if (!map) return [];
-      if (map.getVariables) return map.getVariables();
-      if (map.getAllVariables) return map.getAllVariables();
-      if (Array.isArray(map.variables)) return map.variables;
-    } catch (e) {}
-    return [];
-  }
-
-  function getVarId(v) { try { return v?.id ?? (v.getId ? v.getId() : null); } catch (e) { return null; } }
-  function getVarName(v) { try { return v?.name ?? (v.getName ? v.getName() : null); } catch(e) { return null; } }
-  function getVarType(v) { try { return v?.type ?? (v.getType ? v.getType() : "Global"); } catch(e) { return "Global"; } }
-
-  function createWorkspaceVariable(ws, name, type, id) {
-    try {
-      const map = workspaceGetVariableMap(ws);
-      if (map?.createVariable) return map.createVariable(name, type || "", id);
-      if (ws?.createVariable) return ws.createVariable(name, type || "", id);
-      if (Blockly?.Variables?.createVariable) return Blockly.Variables.createVariable(ws, name, type || "", id);
-    } catch(e) { console.warn("[ExtVars] createWorkspaceVariable error:", e); }
-    return null;
-  }
-
-  function deleteWorkspaceVariable(ws, idOrName) {
-    try {
-      const map = workspaceGetVariableMap(ws);
-      if (!map) return false;
-      if (map.deleteVariableById) { try { map.deleteVariableById(idOrName); return true; } catch(e){} }
-      if (map.deleteVariable) { try { map.deleteVariable(idOrName); return true; } catch(e){} }
-      if (map.removeVariable) { try { map.removeVariable(idOrName); return true; } catch(e){} }
-      if (map.getVariables) {
-        const vs = map.getVariables();
-        const idx = vs.findIndex(v => getVarId(v) === idOrName || getVarName(v) === idOrName);
-        if (idx >= 0) { try { vs.splice(idx,1); return true; } catch(e){} }
-      }
-    } catch(e) { console.warn("[ExtVars] deleteWorkspaceVariable error:", e); }
-    return false;
-  }
-
-  function renameWorkspaceVariable(ws, varObj, newName) {
-    try {
-      const map = workspaceGetVariableMap(ws);
-      if (!map) return false;
-      let found = null;
-      const id = getVarId(varObj);
-      if (id && map.getVariableById) { try { found = map.getVariableById(id); } catch(e){found=null;} }
-      if (!found && map.getVariable) { try { found = map.getVariable(id) || map.getVariable(getVarName(varObj)); } catch(e){found=null;} }
-      if (found) { try { found.name = newName; return true; } catch(e){} }
-      if (varObj?.name !== undefined) { varObj.name = newName; return true; }
-    } catch(e) { console.warn("[ExtVars] renameWorkspaceVariable error:", e); }
-    return false;
-  }
-
-  // ---------- update blocks after rename ----------
-  function updateBlocksForVariableRename(oldName, newName, ws) {
-    if (!ws) return;
-    const allBlocks = ws.getAllBlocks(false);
-    let changed = 0;
-
-    allBlocks.forEach(block => {
-        if (!block) return;
-        const varField = block.getField && block.getField("VAR");
-        if (!varField) return;
+    function loadCategoryOrder() {
         try {
-            const val = varField.getValue?.();
-            const varObj = ws.getVariableById?.(val);
-            if (varObj && varObj.name === newName) {
-                varField.setValue(val);
-                block.render?.();
-                changed++;
-            }
-        } catch (e) {}
-    });
-
-    try {
-        const dummyName = "__EXTVARS_DUMMY__";
-        const dummyId = "EXTVARS_DUMMY_" + Date.now();
-        const dummyVar = createWorkspaceVariable(ws, dummyName, "Global", dummyId);
-        if (dummyVar) {
-            deleteWorkspaceVariable(ws, dummyId) || deleteWorkspaceVariable(ws, dummyName);
-        }
-    } catch (e) {}
-  }
-
-  function createID(length = 20) {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-+%@^!=";
-    function generateId() {
-      let result = "";
-      for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return result;
-    }
-    try {
-      const ws = getMainWorkspaceSafe();
-      const vars = workspaceGetVariables(ws);
-      const existingIds = new Set(
-        vars.map(v => getVarId(v)).filter(id => typeof id === "string")
-      );
-      let newId;
-      do {
-        newId = generateId();
-      } while (existingIds.has(newId));
-      return newId;
-    } catch (e) {
-      return generateId();
-    }
-  }
-
-  // ---------- live registry ----------
-  function getLiveRegistry() {
-    const ws = getMainWorkspaceSafe();
-    const live = {};
-    for (const c of CATEGORIES) live[c] = [];
-    try {
-      const vars = workspaceGetVariables(ws);
-      for (const v of vars) {
-        const id = getVarId(v);
-        const name = getVarName(v);
-        const type = getVarType(v) || "Global";
-        const cat = (typeof type === "string") ? type : "Global";
-        if (!live[cat]) live[cat] = [];
-        live[cat].push({ id, name, type, _raw: v });
-      }
-    } catch(e){}
-    return live;
-  }
-
-  function isNestedInside(block, parent) {
-    if (!parent || !parent.inputList) return false;
-    for (const input of parent.inputList) {
-      if (!input.connection) continue;
-      const target = input.connection.targetBlock_;
-      if (!target) continue;
-      if (target === block) return true;
-    }
-    return false;
-  }
-
-  function countVariableUsage(ws, varDef) {
-    if (!ws || !varDef) return 0;
-    const allBlocks = ws.getAllBlocks ? ws.getAllBlocks() : [];
-    const targetId = getVarId(varDef);
-    let count = 0;
-
-    for (const block of allBlocks) {
-        if (!block) continue;
-        const varField = block.getField && block.getField("VAR");
-        if (!varField) continue;
-        try {
-            const val = varField.getValue?.();
-            if (val === targetId) {
-                let nested = false;
-                for (const parent of allBlocks) {
-                    if (parent === block) continue;
-                    if (isNestedInside(block, parent)) { nested = true; break; }
+            const saved = localStorage.getItem(STORAGE_KEY_CATS);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    const ordered = parsed.filter(c => DEFAULT_CATEGORIES.includes(c));
+                    DEFAULT_CATEGORIES.forEach(c => {
+                        if (!ordered.includes(c)) ordered.push(c);
+                    });
+                    return ordered;
                 }
-                if (!nested) count++;
             }
         } catch (e) {}
-    }
-    return count;
-  }
-
-  // ---------- 変数マップ内の登録順序を最初から再登録し直す ----------
-  function reorderVariablesInMap(ws, cat, orderedIds) {
-    const map = workspaceGetVariableMap(ws);
-    if (!map) return;
-
-    const vm = map.variableMap;
-    if (!vm || typeof vm.get !== "function") return;
-
-    const raw = vm.get(cat);
-    if (!Array.isArray(raw)) return;
-
-    const varMap = new Map();
-    for (const v of raw) {
-      varMap.set(getVarId(v), v);
+        return [...DEFAULT_CATEGORIES];
     }
 
-    const newArr = [];
-    for (const id of orderedIds) {
-      if (varMap.has(id)) {
-        newArr.push(varMap.get(id));
-        varMap.delete(id);
-      }
-    }
-    for (const v of varMap.values()) {
-      newArr.push(v);
+    function saveCategoryOrder(order) {
+        try { localStorage.setItem(STORAGE_KEY_CATS, JSON.stringify(order)); } catch (e) {}
     }
 
-    raw.length = 0;
-    for (const v of newArr) {
-      raw.push(v);
+    function loadDefOrderMap() {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY_DEF_ORDER);
+            if (saved) return JSON.parse(saved);
+        } catch(e) {}
+        return {};
     }
 
-    vm.set(cat, raw);
+    function saveDefOrderMap(map) {
+        try { localStorage.setItem(STORAGE_KEY_DEF_ORDER, JSON.stringify(map)); } catch(e) {}
+    }
+
+    let CATEGORIES = loadCategoryOrder();
+
+    // ---------- Blockly Workspace & Variable Helpers ----------
+    function getMainWorkspaceSafe() {
+        try {
+            if (typeof _Blockly !== "undefined" && _Blockly.getMainWorkspace) return _Blockly.getMainWorkspace();
+            if (typeof Blockly !== "undefined" && Blockly.getMainWorkspace) return Blockly.getMainWorkspace();
+            if (typeof BF2042Portal !== "undefined" && BF2042Portal.getMainWorkspace) return BF2042Portal.getMainWorkspace();
+        } catch (e) {}
+        return null;
+    }
+
+    function workspaceGetVariableMap(ws) {
+        try {
+            if (!ws) return null;
+            if (ws.getVariableMap) return ws.getVariableMap();
+            if (ws.variableMap) return ws.variableMap;
+        } catch (e) {}
+        return null;
+    }
+
+    function workspaceGetVariables(ws) {
+        try {
+            const map = workspaceGetVariableMap(ws);
+            if (!map) return [];
+            if (map.getVariables) return map.getVariables();
+            if (map.getAllVariables) return map.getAllVariables();
+            if (Array.isArray(map.variables)) return map.variables;
+        } catch (e) {}
+        return [];
+    }
+
+    function getVarId(v) { try { return v?.id ?? (v.getId ? v.getId() : null); } catch (e) { return null; } }
+    function getVarName(v) { try { return v?.name ?? (v.getName ? v.getName() : null); } catch(e) { return null; } }
+    function getVarType(v) { try { return v?.type ?? (v.getType ? v.getType() : "Global"); } catch(e) { return "Global"; } }
+
+    function createWorkspaceVariable(ws, name, type, id) {
+        try {
+            const map = workspaceGetVariableMap(ws);
+            if (map?.createVariable) return map.createVariable(name, type || "", id);
+            if (ws?.createVariable) return ws.createVariable(name, type || "", id);
+        } catch(e) {}
+        return null;
+    }
+
+    function deleteWorkspaceVariable(ws, idOrName) {
+        try {
+            const map = workspaceGetVariableMap(ws);
+            if (!map) return false;
+            if (map.deleteVariableById) { map.deleteVariableById(idOrName); return true; }
+            if (map.deleteVariable) { map.deleteVariable(idOrName); return true; }
+        } catch(e) {}
+        return false;
+    }
+
+    function renameWorkspaceVariable(ws, varObj, newName) {
+        try {
+            const map = workspaceGetVariableMap(ws);
+            if (!map) return false;
+            let found = null;
+            const id = getVarId(varObj);
+            if (id && map.getVariableById) found = map.getVariableById(id);
+            if (found) { found.name = newName; return true; }
+            if (varObj?.name !== undefined) { varObj.name = newName; return true; }
+        } catch(e) {}
+        return false;
+    }
+
+    function updateBlocksForVariableRename(oldName, newName, ws) {
+        if (!ws) return;
+        const allBlocks = ws.getAllBlocks(false);
+        allBlocks.forEach(block => {
+            if (!block) return;
+            const varField = block.getField && block.getField("VAR");
+            if (!varField) return;
+            try {
+                const val = varField.getValue?.();
+                const varObj = ws.getVariableById?.(val);
+                if (varObj && varObj.name === newName) {
+                    varField.setValue(val);
+                    block.render?.();
+                }
+            } catch (e) {}
+        });
+    }
+
+    function createID(length = 20) {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        let result = "";
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+
+    function getLiveRegistry() {
+        const ws = getMainWorkspaceSafe();
+        const live = {};
+        for (const c of CATEGORIES) live[c] = [];
+        try {
+            const vars = workspaceGetVariables(ws);
+            for (const v of vars) {
+                const id = getVarId(v);
+                const name = getVarName(v);
+                const type = getVarType(v) || "Global";
+                const cat = (typeof type === "string") ? type : "Global";
+                if (!live[cat]) live[cat] = [];
+                live[cat].push({ id, name, type, _raw: v });
+            }
+        } catch(e){}
+        return live;
+    }
+
+    function countVariableUsage(ws, varDef) {
+        if (!ws || !varDef) return 0;
+        const allBlocks = ws.getAllBlocks ? ws.getAllBlocks() : [];
+        const targetId = getVarId(varDef);
+        let count = 0;
+        for (const block of allBlocks) {
+            if (!block) continue;
+            const varField = block.getField && block.getField("VAR");
+            if (!varField) continue;
+            try {
+                if (varField.getValue?.() === targetId) count++;
+            } catch (e) {}
+        }
+        return count;
+    }
+
+    function reorderVariablesInMap(ws, cat, orderedIds) {
+        const map = workspaceGetVariableMap(ws);
+        if (!map) return;
+        const vm = map.variableMap;
+        if (!vm || typeof vm.get !== "function") return;
+        const raw = vm.get(cat);
+        if (!Array.isArray(raw)) return;
+
+        const varMap = new Map();
+        for (const v of raw) varMap.set(getVarId(v), v);
+
+        const newArr = [];
+        for (const id of orderedIds) {
+            if (varMap.has(id)) {
+                newArr.push(varMap.get(id));
+                varMap.delete(id);
+            }
+        }
+        for (const v of varMap.values()) newArr.push(v);
+
+        raw.length = 0;
+        for (const v of newArr) raw.push(v);
+        vm.set(cat, raw);
+    }
+
+    // ---------- CSS Styles ----------
+    (function injectStyle() {
+        const style = document.createElement("style");
+        style.textContent = `
+            .ev-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:Arial,sans-serif;}
+            .ev-modal{width:900px;height:600px;background:#1e1e1e;border-radius:8px;padding:16px;display:flex;flex-direction:column;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,0.8);}
+            .ev-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px;}
+            .ev-title{font-size:18px;font-weight:bold;}
+            .ev-content{display:flex;gap:12px;flex:1;overflow:hidden;}
+            .ev-cats{width:220px;background:#111;border-radius:6px;padding:8px;overflow-y:auto;border:1px solid #333;}
+            .ev-cat{padding:8px 10px;border-radius:4px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#222;margin-bottom:4px;font-size:13px;}
+            .ev-cat:hover{background:#333;}
+            .ev-cat.selected{background:#0e639c;font-weight:bold;}
+            .ev-list{flex:1;background:#111;border-radius:6px;padding:12px;overflow-y:auto;display:flex;flex-direction:column;border:1px solid #333;}
+            .ev-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#222;border-radius:4px;margin-bottom:6px;font-size:13px;cursor:grab;}
+            .ev-row:active{cursor:grabbing;}
+            .ev-btn{padding:5px 10px;border-radius:4px;border:none;color:#fff;cursor:pointer;font-size:12px;}
+            .ev-add{background:#0e639c;}
+            .ev-edit{background:#444;}
+            .ev-del{background:#a1260d;}
+            .ev-close{background:#555;}
+            .ev-muted{color:#888;font-size:12px;}
+        `;
+        document.head.appendChild(style);
+    })();
+
+    // ---------- Modal Panel ----------
+    function showVariableManagerPanel() {
+        const ws = getMainWorkspaceSafe();
+        const live = getLiveRegistry();
+
+        const overlay = document.createElement("div");
+        overlay.className = "ev-overlay";
+
+        const modal = document.createElement("div");
+        modal.className = "ev-modal";
+        overlay.appendChild(modal);
+
+        // Header
+        const header = document.createElement("div");
+        header.className = "ev-header";
+        const title = document.createElement("div");
+        title.className = "ev-title";
+        title.innerText = "Variable Manager";
+        header.appendChild(title);
+
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "ev-btn ev-close";
+        closeBtn.innerText = "✕ Close";
+        closeBtn.onclick = () => overlay.remove();
+        header.appendChild(closeBtn);
+        modal.appendChild(header);
+
+        // Content
+        const content = document.createElement("div");
+        content.className = "ev-content";
+        modal.appendChild(content);
+
+        const leftPane = document.createElement("div");
+        leftPane.className = "ev-cats";
+        const rightPane = document.createElement("div");
+        rightPane.className = "ev-list";
+
+        content.appendChild(leftPane);
+        content.appendChild(rightPane);
+
+        let currentCategory = CATEGORIES[0] || "Global";
+        const defOrderMap = loadDefOrderMap();
+
+        function renderModal() {
+            // ==========================================
+            // 左側：カテゴリ一覧の描画 ＆ ドラッグ並び替え
+            // ==========================================
+            leftPane.innerHTML = "";
+            const currentLive = getLiveRegistry();
+
+            leftPane.ondragover = (e) => e.preventDefault();
+            leftPane.ondrop = (e) => {
+                e.preventDefault();
+                const draggedCat = e.dataTransfer.getData("text/category");
+                const targetCat = e.target.closest(".ev-cat")?.dataset.catName;
+                if (draggedCat && targetCat && draggedCat !== targetCat) {
+                    const oldIdx = CATEGORIES.indexOf(draggedCat);
+                    const newIdx = CATEGORIES.indexOf(targetCat);
+                    if (oldIdx > -1 && newIdx > -1) {
+                        CATEGORIES.splice(oldIdx, 1);
+                        CATEGORIES.splice(newIdx, 0, draggedCat);
+                        saveCategoryOrder(CATEGORIES);
+                        renderModal();
+                    }
+                }
+            };
+
+            CATEGORIES.forEach(cat => {
+                const item = document.createElement("div");
+                item.className = `ev-cat ${cat === currentCategory ? "selected" : ""}`;
+                item.dataset.catName = cat;
+                item.draggable = true;
+
+                const count = (currentLive[cat] || []).length;
+                
+                const leftWrap = document.createElement("div");
+                leftWrap.style.cssText = "display:flex; align-items:center; gap:6px; pointer-events:none;";
+                
+                const handle = document.createElement("span");
+                handle.innerText = "≡";
+                handle.style.cssText = "font-weight:bold; color:#aaa;";
+                
+                const nameSpan = document.createElement("span");
+                nameSpan.innerText = cat;
+
+                leftWrap.appendChild(handle);
+                leftWrap.appendChild(nameSpan);
+
+                const countSpan = document.createElement("span");
+                countSpan.className = "ev-muted";
+                countSpan.innerText = count;
+
+                item.appendChild(leftWrap);
+                item.appendChild(countSpan);
+
+                item.ondragstart = (e) => {
+                    e.dataTransfer.setData("text/category", cat);
+                    e.stopPropagation();
+                };
+
+                item.onclick = (e) => {
+                    if (e.target === handle) return;
+                    currentCategory = cat;
+                    renderModal();
+                };
+                leftPane.appendChild(item);
+            });
+
+            // ==========================================
+            // 右側：変数一覧の描画 ＆ ドラッグ並び替え
+            // ==========================================
+            rightPane.innerHTML = "";
+            const varsInCat = currentLive[currentCategory] || [];
+
+            // 新規作成フォーム
+            const formDiv = document.createElement("div");
+            formDiv.style.cssText = "display:flex; gap:8px; margin-bottom:12px;";
+
+            const input = document.createElement("input");
+            input.type = "text";
+            input.placeholder = `[${currentCategory}] New variable name...`;
+            input.style.cssText = "flex:1; padding:6px 10px; background:#222; border:1px solid #444; color:#fff; border-radius:4px; outline:none;";
+
+            const addBtn = document.createElement("button");
+            addBtn.className = "ev-btn ev-add";
+            addBtn.innerText = "Add";
+
+            const handleAdd = () => {
+                const valName = input.value.trim();
+                if (valName) {
+                    const newId = createID();
+                    createWorkspaceVariable(ws, valName, currentCategory, newId);
+                    if (!defOrderMap[currentCategory]) defOrderMap[currentCategory] = [];
+                    defOrderMap[currentCategory].push(newId);
+                    saveDefOrderMap(defOrderMap);
+                    input.value = "";
+                    renderModal();
+                }
+            };
+
+            addBtn.onclick = handleAdd;
+            input.onkeydown = (e) => { if (e.key === "Enter") handleAdd(); };
+
+            formDiv.appendChild(input);
+            formDiv.appendChild(addBtn);
+            rightPane.appendChild(formDiv);
+
+            const listContainer = document.createElement("div");
+            listContainer.style.cssText = "flex:1; overflow-y:auto;";
+
+            // 変数のドロップ処理
+            listContainer.ondragover = (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+            };
+
+            listContainer.ondrop = (e) => {
+                e.preventDefault();
+                const draggedId = e.dataTransfer.getData("text/varId");
+                if (!draggedId) return;
+
+                const targetRow = e.target.closest(".ev-row");
+                
+                if (!defOrderMap[currentCategory]) {
+                    defOrderMap[currentCategory] = varsInCat.map(v => v.id);
+                }
+
+                const orderArr = defOrderMap[currentCategory];
+                const oldIdx = orderArr.indexOf(draggedId);
+                if (oldIdx > -1) orderArr.splice(oldIdx, 1);
+
+                if (targetRow && targetRow.dataset.varId) {
+                    const targetId = targetRow.dataset.varId;
+                    if (targetId !== draggedId) {
+                        const newIdx = orderArr.indexOf(targetId);
+                        if (newIdx > -1) {
+                            orderArr.splice(newIdx, 0, draggedId);
+                        } else {
+                            orderArr.push(draggedId);
+                        }
+                    } else {
+                        orderArr.push(draggedId);
+                    }
+                } else {
+                    orderArr.push(draggedId);
+                }
+
+                saveDefOrderMap(defOrderMap);
+                reorderVariablesInMap(ws, currentCategory, orderArr);
+                renderModal();
+            };
+
+            // デフォルト並び順の適用
+            let sortedVars = [...varsInCat];
+            const savedDefIds = defOrderMap[currentCategory] || [];
+            if (savedDefIds.length > 0) {
+                sortedVars.sort((a, b) => {
+                    const idxA = savedDefIds.indexOf(a.id);
+                    const idxB = savedDefIds.indexOf(b.id);
+                    if (idxA === -1) return 1;
+                    if (idxB === -1) return -1;
+                    return idxA - idxB;
+                });
+            }
+
+            if (sortedVars.length === 0) {
+                const empty = document.createElement("div");
+                empty.className = "ev-muted";
+                empty.style.padding = "20px";
+                empty.style.textAlign = "center";
+                empty.innerText = "No variables in this category";
+                listContainer.appendChild(empty);
+            } else {
+                sortedVars.forEach(v => {
+                    const row = document.createElement("div");
+                    row.className = "ev-row";
+                    row.dataset.varId = v.id;
+                    row.draggable = true;
+
+                    const leftCol = document.createElement("div");
+                    leftCol.style.cssText = "display:flex; align-items:center; gap:8px; pointer-events:none;";
+
+                    const varHandle = document.createElement("span");
+                    varHandle.innerText = "≡";
+                    varHandle.style.cssText = "font-weight:bold; color:#aaa; font-size:16px;";
+
+                    const infoDiv = document.createElement("div");
+                    const usageCount = countVariableUsage(ws, v);
+                    infoDiv.innerHTML = `<div style="font-weight:bold;">${v.name}</div><div class="ev-muted">Uses: ${usageCount}</div>`;
+
+                    leftCol.appendChild(varHandle);
+                    leftCol.appendChild(infoDiv);
+
+                    row.ondragstart = (e) => {
+                        e.dataTransfer.setData("text/varId", v.id);
+                        e.dataTransfer.effectAllowed = "move";
+                        row.style.opacity = "0.4";
+                    };
+
+                    row.ondragend = () => {
+                        row.style.opacity = "1.0";
+                    };
+
+                    const btnGroup = document.createElement("div");
+                    btnGroup.style.display = "flex";
+                    btnGroup.style.gap = "6px";
+
+                    const editBtn = document.createElement("button");
+                    editBtn.className = "ev-btn ev-edit";
+                    editBtn.innerText = "Edit";
+                    editBtn.onclick = () => {
+                        const newName = prompt("Enter new variable name:", v.name);
+                        if (newName && newName.trim() !== "") {
+                            const oldName = v.name;
+                            renameWorkspaceVariable(ws, v._raw, newName.trim());
+                            updateBlocksForVariableRename(oldName, newName.trim(), ws);
+                            renderModal();
+                        }
+                    };
+
+                    const delBtn = document.createElement("button");
+                    delBtn.className = "ev-btn ev-del";
+                    delBtn.innerText = "Delete";
+                    delBtn.onclick = () => {
+                        if (confirm(`Delete variable "${v.name}"?`)) {
+                            deleteWorkspaceVariable(ws, v.id) || deleteWorkspaceVariable(ws, v.name);
+                            if (defOrderMap[currentCategory]) {
+                                defOrderMap[currentCategory] = defOrderMap[currentCategory].filter(id => id !== v.id);
+                                saveDefOrderMap(defOrderMap);
+                            }
+                            renderModal();
+                        }
+                    };
+
+                    btnGroup.appendChild(editBtn);
+                    btnGroup.appendChild(delBtn);
+
+                    row.appendChild(leftCol);
+                    row.appendChild(btnGroup);
+                    listContainer.appendChild(row);
+                });
+            }
+
+            rightPane.appendChild(listContainer);
+        }
+
+        renderModal();
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+        document.body.appendChild(overlay);
+    }
+
+    // ---------- プラグイン登録 ----------
+    const variableManagerItem = {
+        id: "variableManagerItem",
+        displayText: "Variable Manager",
+        scopeType: _Blockly.ContextMenuRegistry.ScopeType.WORKSPACE,
+        weight: 1,
+        preconditionFn: () => "enabled",
+        callback: function () {
+            showVariableManagerPanel();
+        },
+    };
+
+    plugin.registerItem(variableManagerItem);
 
     try {
-      const dummyName = "__EXTVARS_ORDER_DUMMY__";
-      const dummyId = "EXTVARS_ORDER_DUMMY_" + Date.now();
-      const dummyVar = createWorkspaceVariable(ws, dummyName, cat, dummyId);
-      if (dummyVar) {
-        deleteWorkspaceVariable(ws, dummyId) || deleteWorkspaceVariable(ws, dummyName);
-      }
-    } catch (e) {}
-  }
-
-  // ---------- inject CSS ----------
-  (function injectStyle() {
-    const style = document.createElement("style");
-    style.textContent = `
-      .ev-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:999999}
-      .ev-modal{width:min(1100px,94vw);height:min(760px,90vh);background:#1e1e1e;border-radius:10px;padding:14px;display:flex;flex-direction:column;color:#e9eef2;font-family:Inter,Arial,sans-serif;box-shadow:0 12px 48px rgba(0,0,0,0.75)}
-      .ev-content{display:flex;gap:12px;flex:1;overflow:hidden}
-      .ev-cats{width:240px;background:#000000;border-radius:8px;padding:10px;overflow-y:auto}
-      .ev-cat{padding:8px;border-radius:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:#171717;color:#e9eef2;margin-bottom:6px;user-select:none;position:relative}
-      .ev-cat:hover{background:#434343}
-      .ev-cat.selected{background:#6e0000;border-left:4px solid #ff0a03}
-      .ev-cat.dragging{opacity:0.4;background:#333}
-      .ev-cat-left{display:flex;align-items:center;gap:8px}
-      .ev-list{flex:1;background:#000000;border-radius:8px;padding:10px;overflow-y:auto;display:flex;flex-direction:column;}
-      .ev-row{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#171717;border-radius:6px;margin-bottom:8px;}
-      .ev-row.dragging{opacity:0.5;background:#252525;}
-      .ev-btn{padding:6px 10px;border-radius:6px;border:none;color:#fff;cursor:pointer}
-      .ev-add{background:#008a00}
-      .ev-edit{background:#3a3a3a}
-      .ev-del{background:#8a0000}
-      .ev-muted{color:#cdcdcd;font-size:14px}
-      .ev-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-      .ev-title{font-weight:700;font-size:24px}
-      .ev-row-left{display:flex;align-items:center;gap:8px}
-      .ev-drag-handle{width:16px;height:16px;cursor:grab;display:flex;align-items:center;justify-content:center;color:#aaaaaa;font-size:14px;flex-shrink:0;user-select:none}
-      .ev-drag-handle::before{content:"⋮⋮";line-height:1}
-      .ev-row.dragging .ev-drag-handle{cursor:grabbing;color:#ffffff}
-      .ev-prompt-popover{position:fixed;background:#222;border:1px solid #444;border-radius:6px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,0.8);z-index:1000000;display:flex;flex-direction:column;gap:8px;width:440px}
-      .ev-prompt-input{width:100%;padding:6px 8px;border-radius:4px;border:1px solid #555;background:#111;color:#fff;font-size:14px;box-sizing:border-box;outline:none}
-      .ev-prompt-input:focus{border-color:#008a00}
-      .ev-prompt-btns{display:flex;justify-content:flex-end;gap:6px}
-    `;
-    document.head.appendChild(style);
-  })();
-
-  const categorySortMap = {};
-
-  // ---------- 独自入力ポップアップ ----------
-  let currentPrompt = null;
-  function removePrompt() {
-    if (currentPrompt) {
-      try { currentPrompt.remove(); } catch (e) {}
-      currentPrompt = null;
+        _Blockly.ContextMenuRegistry.registry.register(variableManagerItem);
+    } catch (e) {
+        console.warn("Failed to register variableManagerItem directly:", e);
     }
-  }
-
-  function showInlinePrompt(x, y, initialValue, onConfirm) {
-    removePrompt();
-
-    const pop = document.createElement("div");
-    pop.className = "ev-prompt-popover";
-
-    const input = document.createElement("input");
-    input.type = "text";
-    input.className = "ev-prompt-input";
-    input.value = initialValue || "";
-
-    const btnRow = document.createElement("div");
-    btnRow.className = "ev-prompt-btns";
-
-    const okBtn = document.createElement("button");
-    okBtn.className = "ev-btn ev-add";
-    okBtn.innerText = "OK";
-    okBtn.style.padding = "4px 10px";
-
-    const cancelBtn = document.createElement("button");
-    cancelBtn.className = "ev-btn ev-edit";
-    cancelBtn.innerText = "CANCEL";
-    cancelBtn.style.padding = "4px 10px";
-
-    btnRow.appendChild(okBtn);
-    btnRow.appendChild(cancelBtn);
-
-    pop.appendChild(input);
-    pop.appendChild(btnRow);
-    document.body.appendChild(pop);
-    currentPrompt = pop;
-
-    const popWidth = 450;
-    let leftPos = x - popWidth - 10;
-    if (leftPos < 10) leftPos = x + 15;
-    let topPos = y - 20;
-    if (topPos + 90 > window.innerHeight) topPos = window.innerHeight - 95;
-
-    pop.style.left = `${leftPos}px`;
-    pop.style.top = `${topPos}px`;
-
-    input.focus();
-    input.select();
-
-    const doConfirm = () => {
-      const val = input.value.trim();
-      if (val) {
-        removePrompt();
-        onConfirm(val);
-      }
-    };
-
-    okBtn.onclick = (e) => { e.stopPropagation(); doConfirm(); };
-    cancelBtn.onclick = (e) => { e.stopPropagation(); removePrompt(); };
-
-    input.onkeydown = (e) => {
-      if (e.key === "Enter") { e.preventDefault(); doConfirm(); }
-      else if (e.key === "Escape") { e.preventDefault(); removePrompt(); }
-    };
-
-    setTimeout(() => {
-      const outsideClick = (e) => {
-        if (!pop.contains(e.target)) {
-          removePrompt();
-          document.removeEventListener("mousedown", outsideClick);
-        }
-      };
-      document.addEventListener("mousedown", outsideClick);
-    }, 50);
-  }
-
-  // ---------- modal ----------
-  let modalOverlay = null;
-  function removeModal() {
-    if (modalOverlay) {
-      try { modalOverlay.remove(); } catch (e) {}
-      modalOverlay = null;
-    }
-  }
-
-  function openModal() {
-    removeModal();
-    removePrompt();
-    CATEGORIES = loadCategoryOrder();
-    const ws = getMainWorkspaceSafe();
-    const live = getLiveRegistry();
-
-    modalOverlay = document.createElement("div"); 
-    modalOverlay.className = "ev-overlay";
-    const modal = document.createElement("div"); 
-    modal.className = "ev-modal"; 
-    modalOverlay.appendChild(modal);
-
-    const top = document.createElement("div"); 
-    top.className = "ev-top";
-    const title = document.createElement("div"); 
-    title.className = "ev-title"; 
-    title.innerText = "Advanced Variable Manager2"; 
-    top.appendChild(title);
-
-    const topActions = document.createElement("div"); 
-    const closeBtn = document.createElement("button"); 
-    closeBtn.className = "ev-btn ev-del"; 
-    closeBtn.innerText = "Close"; 
-    closeBtn.onclick = () => removeModal(); 
-    topActions.appendChild(closeBtn); 
-    top.appendChild(topActions); 
-    modal.appendChild(top);
-
-    const content = document.createElement("div"); 
-    content.className = "ev-content"; 
-    modal.appendChild(content);
-
-    const left = document.createElement("div"); 
-    left.className = "ev-cats";
-    const center = document.createElement("div"); 
-    center.className = "ev-list";
-
-    content.appendChild(left); 
-    content.appendChild(center);
-
-    let currentCategory = CATEGORIES[0] || "Global";
-
-    // ★ 永久保存されたDEF(手動順序)マップをロード
-    const defOrderMap = loadDefOrderMap();
-    for (const c of CATEGORIES) {
-      const currentIds = (live[c] || []).map(v => v.id);
-      if (!defOrderMap[c] || defOrderMap[c].length === 0) {
-        // まだ保存がなければ現在の順序を初期DEFとして記憶
-        defOrderMap[c] = [...currentIds];
-      } else {
-        // 既存のDEF順に存在しない新規変数があれば末尾に追加
-        currentIds.forEach(id => {
-          if (!defOrderMap[c].includes(id)) defOrderMap[c].push(id);
-        });
-        // 削除された変数は除外
-        defOrderMap[c] = defOrderMap[c].filter(id => currentIds.includes(id));
-      }
-    }
-    saveDefOrderMap(defOrderMap);
-
-    const categoryScrollMap = {};
-
-    function initCatDnD() {
-      left.ondragover = (ev) => {
-        ev.preventDefault();
-        ev.dataTransfer.dropEffect = "move";
-        const dragging = left.querySelector(".ev-cat.dragging");
-        if (!dragging) return;
-        const cats = [...left.querySelectorAll(".ev-cat:not(.dragging)")];
-        const after = cats.find(c => ev.clientY <= c.getBoundingClientRect().top + c.offsetHeight / 2);
-
-        // ★ 高速化: ドロップ前のDOM並び替えだけを軽量に実行
-        if (after) left.insertBefore(dragging, after);
-        else left.appendChild(dragging);
-      };
-
-      left.ondrop = (ev) => {
-        ev.preventDefault();
-        // ★ ドロップが確定した瞬間にだけデータを保存・反映
-        const domCats = [...left.querySelectorAll(".ev-cat")].map(c => c.dataset.catName).filter(Boolean);
-        if (domCats.length > 0) {
-          CATEGORIES = domCats;
-          saveCategoryOrder(CATEGORIES);
-        }
-        rebuildCategories();
-      };
-    }
-
-    function rebuildCategories() {
-      left.innerHTML = "";
-      const fresh = getLiveRegistry();
-      Object.assign(live, fresh);
-      initCatDnD();
-
-      for (const cat of CATEGORIES) {
-        const el = document.createElement("div"); 
-        el.className = "ev-cat";
-        el.dataset.catName = cat;
-        if (cat === currentCategory) el.classList.add("selected");
-
-        const count = (live[cat] || []).length;
-
-        const leftWrap = document.createElement("div");
-        leftWrap.className = "ev-cat-left";
-
-        const handle = document.createElement("div");
-        handle.className = "ev-drag-handle";
-        handle.title = "ドラッグしてグループ順を移動";
-
-        const nameSpan = document.createElement("span");
-        nameSpan.style.fontWeight = "600";
-        nameSpan.innerText = cat;
-
-        leftWrap.appendChild(handle);
-        leftWrap.appendChild(nameSpan);
-
-        const countSpan = document.createElement("span");
-        countSpan.className = "ev-muted";
-        countSpan.innerText = count;
-
-        el.appendChild(leftWrap);
-        el.appendChild(countSpan);
-
-        el.onclick = (e) => {
-          if (e.target === handle) return;
-          categoryScrollMap[currentCategory] = center.scrollTop;
-          currentCategory = cat;
-          rebuildCategories();
-          rebuildList();
-        };
-
-        handle.onmousedown = () => { el.setAttribute("draggable", "true"); };
-        handle.onmouseup = () => { el.removeAttribute("draggable"); };
-
-        el.ondragstart = (ev) => {
-          ev.dataTransfer.effectAllowed = "move";
-          ev.dataTransfer.setData("text/plain", cat);
-          el.classList.add("dragging");
-        };
-
-        el.ondragend = () => {
-          el.classList.remove("dragging");
-          el.removeAttribute("draggable");
-        };
-
-        left.appendChild(el);
-      }
-    }
-
-    function initDnDIfNeeded() {
-      // ドラッグ中：データや再描画には一切触れず、DOM（画面上の見た目）の順番を入れ替えるだけ
-      center.ondragover = (ev) => {
-        ev.preventDefault();
-        ev.dataTransfer.dropEffect = "move";
-        const dragging = center.querySelector(".ev-row.dragging");
-        if (!dragging) return;
-
-        const rows = [...center.querySelectorAll(".ev-row:not(.dragging)")];
-        const after = rows.find(r => ev.clientY <= r.getBoundingClientRect().top + r.offsetHeight / 2);
-
-        if (after) {
-          center.insertBefore(dragging, after);
-        } else {
-          center.appendChild(dragging);
-        }
-      };
-
-      // ドロップ時：ここで初めて新しい並び順を配列にして保存・反映する
-      center.ondrop = (ev) => {
-        ev.preventDefault();
-        const dragging = center.querySelector(".ev-row.dragging");
-        if (dragging) {
-          dragging.classList.remove("dragging");
-          dragging.removeAttribute("draggable");
-        }
-
-        // 画面上の並び順からIDの配列を抽出
-        const newOrder = [...center.querySelectorAll(".ev-row")].map(r => r.dataset.varId);
-
-        // データの保存
-        defOrderMap[currentCategory] = [...newOrder];
-        saveDefOrderMap(defOrderMap);
-        categorySortMap[currentCategory] = "def";
-
-        // ブロックリーのマップ側を更新（重い処理はドロップしたこの瞬間1回だけ）
-        reorderVariablesInMap(ws, currentCategory, newOrder);
-      };
-    }
-
-    function rebuildList() {
-      const fresh = getLiveRegistry(); 
-      Object.assign(live, fresh);
-      center.innerHTML = "";
-      center.scrollTop = 0;
-      initDnDIfNeeded();
-
-      const currentVars = live[currentCategory] || [];
-      let sortMode = categorySortMap[currentCategory] || "def";
-
-      // ヘッダー
-      const header = document.createElement("div"); 
-      header.style.display = "flex"; 
-      header.style.justifyContent = "space-between"; 
-      header.style.alignItems = "center"; 
-      header.style.position = "sticky";
-      header.style.top = "-10px";
-      header.style.background = "#000000";
-      header.style.zIndex = "10";
-      header.style.padding = "6px 0 10px 0";
-      header.style.marginBottom = "4px";
-
-      const leftHeader = document.createElement("div");
-      leftHeader.style.display = "flex";
-      leftHeader.style.alignItems = "center";
-      leftHeader.style.gap = "8px";
-
-      const h = document.createElement("div"); 
-      h.innerHTML = `<strong>${currentCategory} Variables</strong><span class="ev-muted"> Total: ${currentVars.length}</span>`; 
-      leftHeader.appendChild(h);
-
-      const sortBtn = document.createElement("button");
-      sortBtn.className = "ev-btn";
-      sortBtn.style.cssText = "background:#2b2b2b; border:1px solid #666; color:#fff; padding:3px 8px; font-size:12px; border-radius:4px; cursor:pointer;";
-
-      if (sortMode === "asc") {
-        sortBtn.innerText = " [ A → Z ]";
-      } else if (sortMode === "desc") {
-        sortBtn.innerText = " [ Z → A ]";
-      } else {
-        sortBtn.innerText = "[ DEF ]";
-      }
-
-      // ★ ボタンクリック時の処理（DEF順序を絶対に失わない）
-      sortBtn.onclick = (e) => {
-        e.stopPropagation();
-        if (sortMode === "def") sortMode = "asc";
-        else if (sortMode === "asc") sortMode = "desc";
-        else sortMode = "def";
-
-        categorySortMap[currentCategory] = sortMode;
-
-        let workingList = [...(live[currentCategory] || [])];
-        let targetIds = [];
-
-        if (workingList.length > 0) {
-          if (sortMode === "asc") {
-            workingList.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-            targetIds = workingList.map(v => v.id);
-          } else if (sortMode === "desc") {
-            workingList.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
-            targetIds = workingList.map(v => v.id);
-          } else {
-            // ★ [ DEF ] の時は、永久保存してある手動DEF順序を取り出して復元！
-            const savedDefIds = defOrderMap[currentCategory] || [];
-            workingList.sort((a, b) => {
-              const idxA = savedDefIds.indexOf(a.id);
-              const idxB = savedDefIds.indexOf(b.id);
-              if (idxA === -1) return 1;
-              if (idxB === -1) return -1;
-              return idxA - idxB;
-            });
-            targetIds = workingList.map(v => v.id);
-          }
-
-          // 内部登録順を指定順で再登録
-          reorderVariablesInMap(ws, currentCategory, targetIds);
-        }
-
-        rebuildCategories();
-        rebuildList();
-      };
-      leftHeader.appendChild(sortBtn);
-      header.appendChild(leftHeader);
-
-      const addBtn = document.createElement("button"); 
-      addBtn.className = "ev-btn ev-add"; 
-      addBtn.innerText = "Add"; 
-      addBtn.onclick = (e) => {
-        e.stopPropagation();
-        showInlinePrompt(e.clientX, e.clientY, "", (name) => {
-          const id = createID();
-          createWorkspaceVariable(ws, name, currentCategory, id);
-          if (!defOrderMap[currentCategory]) defOrderMap[currentCategory] = [];
-          defOrderMap[currentCategory].push(id);
-          saveDefOrderMap(defOrderMap);
-          rebuildCategories(); 
-          rebuildList();
-        });
-      };
-      header.appendChild(addBtn); 
-      center.appendChild(header);
-
-      let arr = [...currentVars];
-      if (arr.length === 0) { 
-        const empty = document.createElement("div"); 
-        empty.className = "ev-muted"; 
-        empty.innerText = "(no variables)"; 
-        center.appendChild(empty); 
-        return; 
-      }
-
-      arr.forEach((v) => {
-        const row = document.createElement("div"); 
-        row.className = "ev-row";
-        row.dataset.varId = v.id;
-
-        const leftCol = document.createElement("div"); 
-        leftCol.className = "ev-row-left";
-
-        const dragHandle = document.createElement("div");
-        dragHandle.className = "ev-drag-handle";
-
-        const textCol = document.createElement("div");
-        textCol.style.display = "flex";
-        textCol.style.flexDirection = "column";
-
-        const usedCount = countVariableUsage(ws, v);
-        textCol.innerHTML = `<div style="font-weight:600">${v.name}</div><div class="ev-muted">In use: (${usedCount})</div>`;
-
-        leftCol.appendChild(dragHandle);
-        leftCol.appendChild(textCol);
-
-        const rightCol = document.createElement("div");
-
-        const editBtn = document.createElement("button"); 
-        editBtn.className = "ev-btn ev-edit"; 
-        editBtn.style.marginRight = "6px"; 
-        editBtn.innerText = "Edit"; 
-        editBtn.onclick = (e) => {
-          e.stopPropagation();
-          showInlinePrompt(e.clientX, e.clientY, v.name, (newName) => {
-            const oldName = v.name;
-            renameWorkspaceVariable(ws, v._raw, newName);
-            updateBlocksForVariableRename(oldName, newName, ws);
-            rebuildCategories();
-            rebuildList();
-          });
-        };
-      
-        const delBtn = document.createElement("button"); 
-        delBtn.className = "ev-btn ev-del"; 
-        delBtn.innerText = "Delete"; 
-        delBtn.onclick = () => {
-          if (!confirm(`Delete variable "${v.name}"? This may break blocks referencing it.`)) return;
-          deleteWorkspaceVariable(ws, v.id) || deleteWorkspaceVariable(ws, v.name);
-          if (defOrderMap[currentCategory]) {
-            defOrderMap[currentCategory] = defOrderMap[currentCategory].filter(id => id !== v.id);
-            saveDefOrderMap(defOrderMap);
-          }
-          rebuildCategories(); 
-          rebuildList();
-        };
-
-        rightCol.appendChild(editBtn); 
-        rightCol.appendChild(delBtn); 
-
-        row.appendChild(leftCol); 
-        row.appendChild(rightCol); 
-        center.appendChild(row);
-
-        dragHandle.onmousedown = () => { row.setAttribute("draggable", "true"); };
-        dragHandle.onmouseup = () => { row.removeAttribute("draggable"); };
-
-        row.ondragstart = (ev) => {
-          ev.dataTransfer.effectAllowed = "move";
-          ev.dataTransfer.setData("text/plain", v.id);
-          row.classList.add("dragging");
-        };
-
-        row.ondragend = () => {
-          row.classList.remove("dragging");
-          row.removeAttribute("draggable");
-        };
-      });
-
-      const targetScroll = categoryScrollMap[currentCategory] || 0;
-      setTimeout(() => {
-        center.scrollTop = targetScroll;
-      }, 0);
-    }
-
-    rebuildCategories(); 
-    rebuildList();
-    modalOverlay.addEventListener("click", (ev) => { if (ev.target === modalOverlay) removeModal(); });
-    document.body.appendChild(modalOverlay);
-  }
-
-  // ---------- context menu ----------
-  function registerContextMenuItem(){
-    try{
-      const reg=(typeof _Blockly!=="undefined"&&_Blockly.ContextMenuRegistry?.registry)?_Blockly.ContextMenuRegistry.registry
-               :(typeof Blockly!=="undefined"&&Blockly.ContextMenuRegistry?.registry)?Blockly.ContextMenuRegistry.registry:null;
-      if(reg && typeof reg.register==="function"){
-        const item={
-          id:"manageExtendedVariables",
-          displayText:"Manage Variables2",
-          preconditionFn:()=> "enabled",
-          callback:()=>openModal(),
-          scopeType:(typeof _Blockly!=="undefined"&&_Blockly.ContextMenuRegistry)?_Blockly.ContextMenuRegistry.ScopeType.WORKSPACE
-                   :(typeof Blockly!=="undefined"&&Blockly.ContextMenuRegistry)?Blockly.ContextMenuRegistry.ScopeType.WORKSPACE:null,
-          weight:98
-        };
-        try{ if(reg.getItem && reg.getItem(item.id)) reg.unregister(item.id); }catch(e){}
-        reg.register(item);
-        return;
-      }
-    }catch(e){}
-
-    (function domFallback(){
-      document.addEventListener("contextmenu",()=>{
-        setTimeout(()=>{
-          const menu=document.querySelector(".context-menu, .bp-context-menu, .blocklyContextMenu"); if(!menu) return;
-          if(menu.querySelector("[data-extvars]")) return;
-          const el=document.createElement("div"); el.setAttribute("data-extvars","1"); el.style.padding="6px 10px"; el.style.cursor="pointer"; el.style.color="#e9eef2"; el.textContent="Manage Variables2"; el.addEventListener("click",()=>{ openModal(); try{menu.style.display="none";}catch(e){} }); menu.appendChild(el);
-        },40);
-      });
-    })();
-  }
-
-  function initialize(){ 
-    registerContextMenuItem(); 
-    if(plugin) plugin.openManager=openModal; 
-    console.info("[ExtVars] Live Extended Variable Manager initialized (workspace-only)."); 
-  }
-  setTimeout(initialize, 900);
-
-  // ---------- safe export of console helpers ----------
-  window._getMainWorkspaceSafe = getMainWorkspaceSafe;
-  window._updateBlocksForVariableRename = updateBlocksForVariableRename;
-
 })();
