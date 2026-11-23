@@ -144,7 +144,7 @@
 
         const label = document.createElement("span");
         label.style.cssText = "color: #9aa5a7; font-size: 11px;";
-        label.textContent = isJa ? "フォントサイズ" : "Font Size";
+        label.textContent = isJa ? "サイズ" : "Size";
 
         const fGroup = document.createElement("div");
         fGroup.style.cssText = "display: flex; align-items: center; gap: 6px;";
