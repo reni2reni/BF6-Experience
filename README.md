@@ -37,7 +37,7 @@ Install the following plug-ins via the **Plug-in Manager** to unlock additional 
 ### 📦 BF6_CODESTOCK (Snippet & Block Stock Manager)
 A hierarchical snippet manager for saving reusable blocks and logic groups and inserting them into your workspace anytime.
 * **One-Click Block Registration**: Right-click any block and select **`CODE STOCK`** to open the entry form pre-filled with the block's JSON data.
-* **Flexible Insertion (Click or Drag & Drop)**:
+* **Flexible Insertion (Drag & Drop)**:
   * **Drag & Drop** an item outside the panel to preview it under your cursor and snap-connect it directly to nearby blocks.
 * **Hierarchical Folders & Color Coding**:
   * Organize snippets in up to 8×8 **Parent × Child** folders with a collapsible left tree sidebar.
