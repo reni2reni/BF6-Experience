@@ -2490,14 +2490,12 @@
 
                         // 2. 指を離した場所へ、UNDOが100%効く pasteBlockAt で正式配置！
                         const coords = getWorkspaceCoords(ws, upEvent);
-                        pasteBlockAt(ws, item, { x: coords.x - 20, y: coords.y - 15 }, true); // ★ 第4引数に true を指定
+                        pasteBlockAt(ws, item, { x: coords.x - 20, y: coords.y - 15 });
                     }
 
                     if (!isPinned) {
                         closePanel();
                     }
-                } else {
-                    handleItemClick(item, nameEl);
                 }
             };
 
@@ -2555,10 +2553,8 @@
             if (typeof createdBlock.render === "function") createdBlock.render();
             if (typeof createdBlock.select === "function") createdBlock.select();
 
-            // ★ ドラッグ配置時のみ自動接続を許可。クリック時は単体ブロックとして置くだけにする
-            if (enableAutoConnect) {
-                autoConnectBlock(createdBlock);
-            }
+            // 自動接続もイベント停止中に行う。
+            autoConnectBlock(createdBlock);
 
             if (typeof ws.resizeContents === "function") ws.resizeContents();
         } finally {
@@ -2587,7 +2583,7 @@
 
         if (ws) {
             const coords = getClickPasteCoords(ws);
-            pasteBlockAt(ws, item, coords, false); // ★ false で単体ブロックとして独立配置（結合させない）
+            pasteBlockAt(ws, item, coords);
             setStatus("Pasted into workspace");
         } else {
             copyText(item.body).then(() => setStatus("COPY OK!"));
