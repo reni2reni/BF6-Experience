@@ -1,7 +1,7 @@
 {
   "id": "codeStock",
   "name": "Code Stock",
-  "version": "1.6.3",
+  "version": "1.6.5",
   "description": "Code Stock for BF2042 Portal",
   "author": "reni2",
   "main": "index.js"
