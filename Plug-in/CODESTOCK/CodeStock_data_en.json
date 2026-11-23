@@ -5029,7 +5029,7 @@
       "id": "47fbe18e-a4a9-4ca4-ac73-4c2ccc628912",
       "order": 12,
       "parent": 0,
-      "title": "Modulo　A/Bの余り"
+      "title": "Modulo"
     },
     {
       "body": "{\n  \"type\": \"RoundToInteger\",\n  \"id\": \"l?X_WN=`C!O_|$(N/pxb\"\n}",
@@ -5038,7 +5038,7 @@
       "id": "3f4834e9-308f-4b5c-92d2-e5331e542093",
       "order": 17,
       "parent": 0,
-      "title": "RoundToInteger　四捨五入"
+      "title": "RoundToInteger"
     },
     {
       "body": "{\n  \"type\": \"Ceiling\",\n  \"id\": \"!UDb+kCDO|U$HHuzfcwA\"\n}",
@@ -5047,7 +5047,7 @@
       "id": "82b683d2-d785-4038-83ba-904c292addd5",
       "order": 18,
       "parent": 0,
-      "title": "Ceiling　切り上げ"
+      "title": "Ceiling"
     },
     {
       "body": "{\n  \"type\": \"Floor\",\n  \"id\": \"s{@pn4k,`0QK$kW.%dIH\"\n}",
@@ -5056,7 +5056,7 @@
       "id": "c672592a-b113-4300-bdc9-b8799df3b892",
       "order": 19,
       "parent": 0,
-      "title": "Floor　切り捨て"
+      "title": "Floor"
     },
     {
       "body": "{\n  \"type\": \"RandomReal\",\n  \"id\": \"h1]xN*VY%OV=ek}S2)$Q\",\n  \"inputs\": {\n    \"VALUE-0\": {\n      \"block\": {\n        \"type\": \"Number\",\n        \"id\": \".KtSyo3dc09.v(o$;NJL\",\n        \"fields\": {\n          \"NUM\": 0\n        }\n      }\n    },\n    \"VALUE-1\": {\n      \"block\": {\n        \"type\": \"Number\",\n        \"id\": \"5qA|Gu/T_a$00u_,OO0(\",\n        \"fields\": {\n          \"NUM\": 1\n        }\n      }\n    }\n  }\n}",
@@ -5065,7 +5065,7 @@
       "id": "9f7c5bbe-dd9d-4eb5-9b10-2598844973f1",
       "order": 15,
       "parent": 0,
-      "title": "RandomReal ランダム実数"
+      "title": "RandomReal"
     },
     {
       "body": "{\n  \"type\": \"Pi\",\n  \"id\": \"C0JBzzG7W5np#[E?9yMQ\"\n}",
@@ -5146,7 +5146,7 @@
       "id": "a74be1b2-f989-4a75-8f9c-70ac286bad05",
       "order": 22,
       "parent": 0,
-      "title": "AbsoluteValue 絶対値"
+      "title": "AbsoluteValue"
     },
     {
       "body": "{\n  \"type\": \"AngleBetweenVectors\",\n  \"id\": \"vR$*zR8Aot8k%sp]TAp]\"\n}",
@@ -5155,7 +5155,7 @@
       "id": "a841c652-c2c9-4c83-b98f-6247ae482eca",
       "order": 23,
       "parent": 0,
-      "title": "AngleBetweenベクトル間の角度"
+      "title": "AngleBetween"
     },
     {
       "body": "{\n  \"type\": \"AngleDifference\",\n  \"id\": \"G7.+I]}B.1/^8C9|}V8z\"\n}",
@@ -5164,7 +5164,7 @@
       "id": "89ce4d07-79bf-4a17-9484-367f58dbbc67",
       "order": 24,
       "parent": 0,
-      "title": "AngleDifference 2つの角度の差"
+      "title": "AngleDifference"
     },
     {
       "body": "{\n  \"type\": \"ArccosineInDegrees\",\n  \"id\": \"w5,A[FdOi7m*`LGUSY7n\"\n}",
@@ -5173,7 +5173,7 @@
       "id": "8841e985-9917-4050-9b28-4ab347f318fc",
       "order": 31,
       "parent": 0,
-      "title": "ArccosineInD Aコサイン度"
+      "title": "ArccosineInD"
     },
     {
       "body": "{\n  \"type\": \"ArccosineInRadians\",\n  \"id\": \"~VTN6.`eSf2)E[V6e$xT\"\n}",
@@ -5182,7 +5182,7 @@
       "id": "9b2b4065-365e-4b64-8aaa-4b598ed738b0",
       "order": 32,
       "parent": 0,
-      "title": "ArccosineInR AコサインR"
+      "title": "ArccosineInR"
     },
     {
       "body": "{\n  \"type\": \"ArcsineInDegrees\",\n  \"id\": \"}_93`.o[l6;Za/@2V}I4\"\n}",
@@ -5191,7 +5191,7 @@
       "id": "b8b07925-e6df-4679-b797-fce5c47dbc77",
       "order": 33,
       "parent": 0,
-      "title": "ArcsineInD Aサイン度"
+      "title": "ArcsineInD"
     },
     {
       "body": "{\n  \"type\": \"ArcsineInRadians\",\n  \"id\": \"63B8gEHsiX5%a(wyc6Jo\"\n}",
@@ -5200,7 +5200,7 @@
       "id": "50196fce-8f8c-4031-9879-e3dc6c7daba0",
       "order": 34,
       "parent": 0,
-      "title": "ArcsineInR AサインR"
+      "title": "ArcsineInR"
     },
     {
       "body": "{\n  \"type\": \"ArctangentInDegrees\",\n  \"id\": \"+S:NT9l_K[gDL:Bxc}H6\"\n}",
@@ -5209,7 +5209,7 @@
       "id": "38ea7416-1017-4778-b179-a79b23ce6fc4",
       "order": 35,
       "parent": 0,
-      "title": "ArctangentInD Aタンジェント度"
+      "title": "ArctangentInD"
     },
     {
       "body": "{\n  \"type\": \"ArctangentInRadians\",\n  \"id\": \"92=I],6seKRcv*vVwmgx\"\n}",
@@ -5218,7 +5218,7 @@
       "id": "84f2280f-b0b0-48d9-9e47-4448dbdb4dc0",
       "order": 36,
       "parent": 0,
-      "title": "ArctangentInR AタンジェントR"
+      "title": "ArctangentInR"
     },
     {
       "body": "{\n  \"type\": \"CosineFromDegrees\",\n  \"id\": \"4nv(jIeqf.+aT)9c-)/R\"\n}",
@@ -5227,7 +5227,7 @@
       "id": "7539a1f9-dea3-4e03-9de3-3038ff97499e",
       "order": 27,
       "parent": 0,
-      "title": "CosineFromD コサイン度"
+      "title": "CosineFromD"
     },
     {
       "body": "{\n  \"type\": \"CosineFromRadians\",\n  \"id\": \"3t}uU^^eS`0!3YXD?B`;\"\n}",
@@ -5236,7 +5236,7 @@
       "id": "828ffed6-3375-40be-9f14-5bcad59af075",
       "order": 28,
       "parent": 0,
-      "title": "CosineFromR コサインR"
+      "title": "CosineFromR"
     },
     {
       "body": "{\n  \"type\": \"CreateTransform\",\n  \"id\": \"$|3.bM/dOftUP/%qhn,]\"\n}",
@@ -5245,7 +5245,7 @@
       "id": "652b5609-fe74-4d90-8c1c-440926b7ae0a",
       "order": 37,
       "parent": 0,
-      "title": "CreateTransform　位置、回転"
+      "title": "CreateTransform"
     },
     {
       "body": "{\n  \"type\": \"CreateVector\",\n  \"id\": \",%X^y@$GHoWhyia^-rq#\"\n}",
@@ -5254,7 +5254,7 @@
       "id": "274ee3bf-f70e-41dd-8337-d591d1524c99",
       "order": 16,
       "parent": 0,
-      "title": "CreateVector　ベクトル作成ｘ，ｙ，ｚ"
+      "title": "CreateVector"
     },
     {
       "body": "{\n  \"type\": \"CrossProduct\",\n  \"id\": \"41J[]~BLcDYKGkT.n*`0\"\n}",
@@ -5263,7 +5263,7 @@
       "id": "d3135261-40b4-4048-8ada-dd44b7595c62",
       "order": 38,
       "parent": 0,
-      "title": "CrossProduct　クロス積"
+      "title": "CrossProduct"
     },
     {
       "body": "{\n  \"type\": \"DegreesToRadians\",\n  \"id\": \"gN:%7bjk|z+o7VH,i0do\"\n}",
@@ -5272,7 +5272,7 @@
       "id": "32aa7ba6-7dc2-48f5-bb40-d5dd94c933db",
       "order": 39,
       "parent": 0,
-      "title": "DegreesToR　角度をラジアンに"
+      "title": "DegreesToR"
     },
     {
       "body": "{\n  \"type\": \"DirectionFromAngles\",\n  \"id\": \"bd+P?h.E_*YAxP=$KKTK\"\n}",
@@ -5281,7 +5281,7 @@
       "id": "c6a9ce7b-8af0-4983-941b-361f3b5cb494",
       "order": 40,
       "parent": 0,
-      "title": "DirectionFromAngles ヨー、ピッチ　角度"
+      "title": "DirectionFromAngles"
     },
     {
       "body": "{\n  \"type\": \"DistanceBetween\",\n  \"id\": \"DH5q}5t*k[o|I7?JmQ(N\"\n}",
@@ -5290,7 +5290,7 @@
       "id": "5e06a11b-2c2d-4800-9b64-5e84ff067ff4",
       "order": 41,
       "parent": 0,
-      "title": "DistanceBetween A-B　方位V"
+      "title": "DistanceBetween"
     },
     {
       "body": "{\n  \"type\": \"DotProduct\",\n  \"id\": \"z[#MLQ^fYFV{(KHV33Y;\"\n}",
@@ -5299,7 +5299,7 @@
       "id": "32cf55c9-0913-44c9-a437-318db70d2a06",
       "order": 42,
       "parent": 0,
-      "title": "DotProduct ドット積"
+      "title": "DotProduct"
     },
     {
       "body": "{\n  \"type\": \"Max\",\n  \"id\": \"mu*^vEDcirv={4[v*)GR\"\n}",
@@ -5317,7 +5317,7 @@
       "id": "a9bef462-790c-4fa6-8cf2-ab301cbb10b0",
       "order": 44,
       "parent": 0,
-      "title": "Normalize 単位長さの正規化"
+      "title": "Normalize"
     },
     {
       "body": "{\n  \"type\": \"RadiansToDegrees\",\n  \"id\": \"j5NzKdpamp5n^5tg;YcN\"\n}",
@@ -5326,7 +5326,7 @@
       "id": "13c97fd8-2651-4f56-94d2-1c4c1ec596ea",
       "order": 45,
       "parent": 0,
-      "title": "RadiansToDegrees　R->D"
+      "title": "RadiansToDegrees"
     },
     {
       "body": "{\n  \"type\": \"RaiseToPower\",\n  \"id\": \"nZLFUFZ21Q0Et98W~$ti\"\n}",
@@ -5335,7 +5335,7 @@
       "id": "2bd1464b-fd5a-4497-95cb-f1eb12efa79a",
       "order": 13,
       "parent": 0,
-      "title": "RaiseToPower　A^B べき乗"
+      "title": "RaiseToPower　A^B"
     },
     {
       "body": "{\n  \"type\": \"SineFromDegrees\",\n  \"id\": \")}`V.v:nCP/ll8b=D0HI\"\n}",
@@ -5344,7 +5344,7 @@
       "id": "c8b68429-e3e6-44d4-99c5-a9d38656f3ae",
       "order": 25,
       "parent": 0,
-      "title": "SineFromDegrees　サイン度"
+      "title": "SineFromDegrees"
     },
     {
       "body": "{\n  \"type\": \"SineFromRadians\",\n  \"id\": \".[2y!sE+y76L@43z[^`l\"\n}",
@@ -5353,7 +5353,7 @@
       "id": "3b25a44b-fd33-40d4-ada9-2778a1ebf3b3",
       "order": 26,
       "parent": 0,
-      "title": "SineFromRadians　サインR"
+      "title": "SineFromRadians"
     },
     {
       "body": "{\n  \"type\": \"SquareRoot\",\n  \"id\": \"zt_9u[:yge80C(WX5fgE\"\n}",
@@ -5362,7 +5362,7 @@
       "id": "0d71b93d-e67a-45eb-acc8-deb0fd956530",
       "order": 21,
       "parent": 0,
-      "title": "SquareRoot　平方根"
+      "title": "SquareRoot"
     },
     {
       "body": "{\n  \"type\": \"TangentFromDegrees\",\n  \"id\": \"]xa;;Es+xthPB-nZ@H(E\"\n}",
@@ -5371,7 +5371,7 @@
       "id": "d300083a-f602-4cae-9685-95a61adc965d",
       "order": 29,
       "parent": 0,
-      "title": "TangentFromD　タンジェント度"
+      "title": "TangentFromD"
     },
     {
       "body": "{\n  \"type\": \"TangentFromRadians\",\n  \"id\": \"QqMQd7UB[Mv,%-+-8;^B\"\n}",
@@ -5380,7 +5380,7 @@
       "id": "a24d9af2-8fe0-4109-9756-3e5080906d42",
       "order": 30,
       "parent": 0,
-      "title": "TangentFromR　タンジェントR"
+      "title": "TangentFromR"
     },
     {
       "body": "{\n  \"type\": \"BackwardVector\",\n  \"id\": \"gb2`#wHq$Z!io,#IRJDV\"\n}",
