@@ -899,12 +899,13 @@
         input.click();
     }
 
-    function showFolderMenu(e, type, index) {
+    function showFolderMenu(e, type, index, parentIndex) {
         const old = document.getElementById("uiPrompt");
         if (old) old.remove();
 
         const isParent = (type === "parent");
-        const currentName = isParent ? state.parents[index] : state.children[state.filterParent][index];
+        const pIdx = (parentIndex !== undefined) ? parentIndex : state.filterParent;
+        const currentName = isParent ? state.parents[index] : (state.children[pIdx] && state.children[pIdx][index]);
         const labelTitle = isParent ? "Folder Name (Parent)" : "SubFolder Name (Child)";
 
         const box = document.createElement("div");
@@ -946,7 +947,10 @@
             const val = input.value.trim();
             if (val) {
                 if (isParent) state.parents[index] = val;
-                else state.children[state.filterParent][index] = val;
+                else {
+                    if (!state.children[pIdx]) state.children[pIdx] = [];
+                    state.children[pIdx][index] = val;
+                }
                 saveState();
                 renderPanel();
             }
@@ -977,10 +981,10 @@
             } else {
                 folderClipboard = {
                     type: "child",
-                    name: state.children[state.filterParent][index],
-                    items: state.items.filter(i => i.parent === state.filterParent && i.child === index).map(i => ({ ...i }))
+                    name: state.children[pIdx][index],
+                    items: state.items.filter(i => i.parent === pIdx && i.child === index).map(i => ({ ...i }))
                 };
-                setStatus(`Copied subfolder [${state.children[state.filterParent][index]}]`);
+                setStatus(`Copied subfolder [${state.children[pIdx][index]}]`);
             }
             box.remove();
         });
@@ -1015,7 +1019,6 @@
                 });
                 setStatus(`Pasted parent folder [${folderClipboard.name}]`);
             } else {
-                const pIdx = state.filterParent;
                 state.children[pIdx][index] = folderClipboard.name;
                 state.items = state.items.filter(i => !(i.parent === pIdx && i.child === index));
                 folderClipboard.items.forEach(i => {
@@ -1056,7 +1059,11 @@
 
         const resetColorBtn = makeButton("✕", () => {
             if (isParent) state.parentColors[index] = null;
-            else state.childColors[state.filterParent][index] = null;
+            else {
+                if (state.childColors && state.childColors[pIdx]) {
+                    state.childColors[pIdx][index] = null;
+                }
+            }
             saveState();
             renderPanel();
             box.remove();
@@ -1073,7 +1080,11 @@
         state.palette.slice(0, COLOR_COUNT).forEach((c, cIdx) => {
             const b = makeButton("", () => {
                 if (isParent) state.parentColors[index] = cIdx;
-                else state.childColors[state.filterParent][index] = cIdx;
+                else {
+                    if (state.childColors && state.childColors[pIdx]) {
+                        state.childColors[pIdx][index] = cIdx;
+                    }
+                }
                 saveState();
                 renderPanel();
                 box.remove();
@@ -1731,7 +1742,7 @@
                     };
                     cEl.oncontextmenu = (e) => {
                         e.preventDefault();
-                        showFolderMenu(e, "child", c);
+                        showFolderMenu(e, "child", c, p); // ★ 第4引数に親インデックス p を渡す
                     };
                     treeNav.appendChild(cEl);
                 }
