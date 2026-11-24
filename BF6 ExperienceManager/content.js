@@ -1705,11 +1705,133 @@
     window.addEventListener('mouseup', onMouseUp, true);
 
     container.appendChild(resizer);
+
+    /* ▼ 開いたブロック種別項目の上部にブロック数を表示 */
+    const CATEGORY_COUNT_BADGE_CLASS = 'bf6-category-block-count-badge';
+
+    function removeStaleCategoryCountBadges(activeContainers) {
+      document.querySelectorAll('.' + CATEGORY_COUNT_BADGE_CLASS).forEach(badge => {
+        const host = badge.parentElement;
+        if (!host || !host.isConnected || !activeContainers.has(host)) {
+          badge.remove();
+        }
+      });
+    }
+
+    function countBlocksInContainer(container) {
+      if (!container) return 0;
+
+      // 1. フライアウト内のブロック要素（g.blocklyDraggable）
+      const svgBlocks = Array.from(container.querySelectorAll('svg .blocklyBlockCanvas > g.blocklyDraggable, g.blocklyDraggable'));
+      if (svgBlocks.length > 0) {
+        return svgBlocks.length;
+      }
+
+      // 2. ツリー／リスト形式のブロック項目
+      const treeItems = Array.from(container.querySelectorAll('[role="treeitem"], .blocklyTreeRow, .blocklyToolboxItem'))
+        .filter(el => !el.closest('.' + CATEGORY_COUNT_BADGE_CLASS));
+      if (treeItems.length > 0) {
+        return treeItems.length;
+      }
+
+      return 0;
+    }
+
+    function findOpenCategoryContainers(tb) {
+      const containers = [];
+
+      // パターンA: 表示中の Blockly フライアウト
+      const flyouts = Array.from(document.querySelectorAll('.blocklyFlyout'));
+      for (const flyout of flyouts) {
+        const style = getComputedStyle(flyout);
+        const rect = flyout.getBoundingClientRect();
+        if (style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0) {
+          containers.push({
+            host: flyout,
+            insertBeforeEl: flyout.firstElementChild,
+            count: countBlocksInContainer(flyout)
+          });
+        }
+      }
+
+      // パターンB: ツールボックス内で展開（aria-expanded="true"）されているカテゴリ配下
+      const expandedItems = Array.from(tb.querySelectorAll('[aria-expanded="true"]'));
+      for (const item of expandedItems) {
+        const group = item.nextElementSibling || item.querySelector('[role="group"], .blocklyTreeChildren');
+        if (!group) continue;
+        const style = getComputedStyle(group);
+        const rect = group.getBoundingClientRect();
+        if (style.display !== 'none' && style.visibility !== 'hidden' && rect.height > 0) {
+          containers.push({
+            host: group,
+            insertBeforeEl: group.firstElementChild,
+            count: countBlocksInContainer(group)
+          });
+        }
+      }
+
+      return containers;
+    }
+
+    function updateOpenedCategoryBlockCount() {
+      const tb = document.querySelector('.blocklyToolboxDiv');
+      if (!tb) {
+        removeStaleCategoryCountBadges(new Set());
+        return;
+      }
+
+      const targets = findOpenCategoryContainers(tb);
+      const activeHosts = new Set();
+      const isJa = isJapanese();
+
+      for (const target of targets) {
+        if (!target.host || target.count <= 0) continue;
+        activeHosts.add(target.host);
+
+        let badge = target.host.querySelector(':scope > .' + CATEGORY_COUNT_BADGE_CLASS);
+        if (!badge) {
+          badge = document.createElement('div');
+          badge.className = CATEGORY_COUNT_BADGE_CLASS;
+          badge.style.cssText = [
+            'display:flex',
+            'align-items:center',
+            'justify-content:space-between',
+            'padding:4px 10px',
+            'margin:0 0 4px 0',
+            'background:rgb(22, 29, 30)',
+            'border-bottom:1px solid #3a4648',
+            'color:#66ccff',
+            'font-size:12px',
+            'font-weight:600',
+            'line-height:1.3',
+            'user-select:none',
+            'box-sizing:border-box',
+            'position:sticky',
+            'top:0',
+            'z-index:15',
+            'pointer-events:none'
+          ].join(';');
+          target.host.insertBefore(badge, target.insertBeforeEl || target.host.firstChild);
+        } else if (target.insertBeforeEl && badge.nextElementSibling !== target.insertBeforeEl && badge !== target.insertBeforeEl) {
+          target.host.insertBefore(badge, target.insertBeforeEl);
+        }
+
+        badge.textContent = isJa ? `ブロック数: ${target.count}` : `Blocks: ${target.count}`;
+      }
+
+      removeStaleCategoryCountBadges(activeHosts);
+    }
+
+    if (!window.__bf6CategoryCountIntervalStarted) {
+      window.__bf6CategoryCountIntervalStarted = true;
+      setInterval(updateOpenedCategoryBlockCount, 250);
+    }
   }
 
   setInterval(initToolboxResizer, 500);
 
 })();
+
 
 // 以前のプロジェクトメニュー幅設定を破棄（リサイズ機能は廃止）
 try { localStorage.removeItem('bf6-project-menu-width'); } catch (_) {}
@@ -1854,4 +1976,78 @@ try { localStorage.removeItem('bf6-project-menu-width'); } catch (_) {}
   [300, 800, 1500, 2500, 4000].forEach(ms => setTimeout(positionButton, ms));
   setInterval(positionButton, 1200);
   window.addEventListener('resize', positionButton, true);
+})();
+
+
+// ========================================
+// Blockly Flyout ブロック数表示（スクロール対応版）
+// ========================================
+(function () {
+  const HEADER_ID = 'blockly-flyout-block-count';
+
+  let observer = null;
+  let observedCanvas = null;
+
+  function updateFlyoutBlockCount() {
+    const flyout = document.querySelector('.blocklyFlyout');
+    const blockCanvas = flyout?.querySelector('.blocklyBlockCanvas');
+
+    if (!flyout || !blockCanvas) return;
+
+    // ブロック一覧の変更だけを監視する
+    if (observedCanvas !== blockCanvas) {
+      if (observer) observer.disconnect();
+
+      observer = new MutationObserver(() => {
+        updateCount();
+      });
+
+      observer.observe(blockCanvas, {
+        childList: true,
+        subtree: true
+      });
+
+      observedCanvas = blockCanvas;
+    }
+
+    updateCount();
+
+    function updateCount() {
+      const count = blockCanvas.querySelectorAll(
+        'g.blocklyDraggable'
+      ).length;
+
+      let header = flyout.querySelector(`#${HEADER_ID}`);
+
+      if (!header) {
+        header = document.createElementNS(
+          'http://www.w3.org/2000/svg',
+          'text'
+        );
+
+        header.setAttribute('id', HEADER_ID);
+        header.setAttribute('x', '100');
+        header.setAttribute('y', '20');
+        header.setAttribute('font-size', '13');
+        header.setAttribute('font-weight', 'bold');
+        header.setAttribute('fill', '#ffffff');
+        header.setAttribute('pointer-events', 'none');
+
+        // ブロック一覧の位置やtransformは変更しない
+        flyout.appendChild(header);
+      }
+
+      const label = `ブロック数：${count}個`;
+
+      // 内容が変わったときだけ更新する
+      if (header.textContent !== label) {
+        header.textContent = label;
+      }
+    }
+  }
+
+  updateFlyoutBlockCount();
+
+  // フライアウトが作り直された場合にも対応
+  setInterval(updateFlyoutBlockCount, 1000);
 })();
