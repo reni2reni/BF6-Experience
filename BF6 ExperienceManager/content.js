@@ -2026,7 +2026,7 @@ try { localStorage.removeItem('bf6-project-menu-width'); } catch (_) {}
         );
 
         header.setAttribute('id', HEADER_ID);
-        header.setAttribute('x', '100');
+        header.setAttribute('x', '200');
         header.setAttribute('y', '20');
         header.setAttribute('font-size', '13');
         header.setAttribute('font-weight', 'bold');
@@ -2037,7 +2037,7 @@ try { localStorage.removeItem('bf6-project-menu-width'); } catch (_) {}
         flyout.appendChild(header);
       }
 
-      const label = `ブロック数：${count}個`;
+      const label = `Blocks: ${count}`;
 
       // 内容が変わったときだけ更新する
       if (header.textContent !== label) {
